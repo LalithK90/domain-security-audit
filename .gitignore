@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+.venv
+venv/
+ENV/
+env/
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Virtualenv / env
+.env/
+venv/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Data and outputs
+*_audit.csv
+*_audit.xlsx
+*_security_checklist.xlsx
+*_security_checklist.csv
+*_active.txt
+*_all.txt
+*_created_not_active.txt
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Certificates and secrets
+*.pem
+*.key
+
+# Requirements lock
+pip-wheel-metadata/
+
+# macOS
+.DS_Store
+
+
+*.txt
+*.csv
