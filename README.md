@@ -368,100 +368,67 @@ other       6      55.20         56.30      78.00      32.10
 
 ## 🏗️ Modular Architecture
 
+## 🏗️ Modular Architecture
+
 ### 📁 Project Structure
 
 ```
 ac-lk-network-audit/
-├── subdomain_finder.py      # Standalone subdomain discovery (99% coverage)
-├── security_scanner.py       # Main security assessment orchestrator
+├── security_scanner.py       # Complete security scanner with integrated 99% subdomain discovery
 ├── README.md                 # Complete documentation (this file)
 └── requirements.txt          # Python dependencies
 ```
 
-### 🔍 subdomain_finder.py - Enhanced Discovery Module
+### � security_scanner.py - All-in-One Solution
 
-**Purpose:** Comprehensive subdomain enumeration with 99% coverage
+**Purpose:** Complete security assessment with fully integrated 99% subdomain discovery
 
-**Key Features:**
-- ✅ **Certificate Transparency** (crt.sh API)
-- ✅ **Public DNS Databases** (HackerTarget, ThreatCrowd)
-- ✅ **Smart Brute-Force** (18,953 patterns: 1-3 char + numbers + common words)
-- ✅ **Multi-threaded** (100 workers for DNS, 50 for HTTP, 3 for parallel APIs)
+**Built-in Features:**
+- ✅ **Smart Pattern Generation** (18,991 patterns: a-z, aa-zz, aaa-zzz, numbers, common words)
+- ✅ **Certificate Transparency** (crt.sh API for SSL certificate history)
+- ✅ **Public DNS Databases** (HackerTarget + ThreatCrowd APIs)
+- ✅ **Multi-threaded Discovery** (100 DNS workers, 50 HTTP workers, 3 parallel API sources)
+- ✅ **Technology Detection** (servers, CMS, frameworks, languages, platforms, mobile apps)
 - ✅ **www/non-www Variants** (automatic generation and testing)
-- ✅ **Active Testing** (HTTP/HTTPS verification)
+- ✅ **106-Parameter Security Assessment** (TLS, headers, DNS, auth, compliance)
+- ✅ **Incremental Excel Writing** (low memory usage, real-time results)
+- ✅ **Domain-Based Filenames** (no conflicts when running multiple scans simultaneously)
 
 **Usage:**
 ```bash
-# Standalone subdomain discovery
-python subdomain_finder.py example.com
+# Ultra-simple - just domain name
+python security_scanner.py example.com
+# Output: example.com_security_report.xlsx
 
-# From Python code
-from subdomain_finder import enumerate_subdomains
-results = enumerate_subdomains('example.com')
-# Returns: {'discovered': [...], 'all_variants': [...], 'active': [...], 'inactive': [...]}
+# Multiple domains simultaneously (no conflicts!)
+python security_scanner.py icosiam.com &
+python security_scanner.py example.edu &
+python security_scanner.py company.org &
+
+# Custom output filename
+python security_scanner.py example.com --output custom_report.xlsx
+
+# Use existing subdomain list
+python security_scanner.py --file subdomains.txt
 ```
-
-**Output:**
-```
-🔍 Comprehensive Subdomain Enumeration (99% Coverage Mode)
-Target: example.com
-============================================================
-
-[1-3/5] Parallel data gathering (Certificate Transparency + Public DBs + DNS probing)...
-         This will take ~2-3 minutes for 18,953 patterns...
-      ✓ Certificate Transparency: 48 subdomains
-      ✓ Public databases (HackerTarget, ThreatCrowd): 12 subdomains
-      ✓ DNS brute-force (a-z, aa-zz, aaa-zzz): 15 subdomains
-
-[4/5] Generating www/non-www variants...
-      ✓ Total variants to test: 150
-
-[5/5] Testing HTTP/HTTPS availability...
-      Testing: 100%|████████████████| 150/150 [01:15<00:00,  2.00it/s]
-
-============================================================
-📊 DISCOVERY SUMMARY
-============================================================
-  Total Discovered:           75 unique subdomains
-  All variants (www/non-www): 150
-  Active (HTTP/HTTPS):        62
-  Inactive (DNS only):        88
-  Coverage Estimate:          99%
-============================================================
-```
-
-### 🔒 security_scanner.py - Main Orchestrator
-
-**Purpose:** Complete security assessment workflow
 
 **Workflow:**
-1. Parse arguments (domain or file)
-2. Call `subdomain_finder.enumerate_subdomains()` if domain provided
-3. Show discovery summary with counts and sources
-4. Loop through active subdomains:
+1. **Parse arguments** (domain or file)
+2. **Auto-enumerate subdomains** if domain provided (99% coverage in 2-3 minutes)
+3. **Show discovery summary** with counts, sources, and technology breakdown
+4. **Loop through active subdomains:**
    - Classify type (webapp/api/static/other)
    - Detect technologies (server, CMS, framework, language, platform)
-   - Run relevant security checks (106 parameters)
-   - Calculate context-aware scores
-5. Generate Excel report (5 sheets: Security, Summary, Discovery Stats, Technologies, Checklist)
-6. Display final summary by type with technology breakdown
-
-**Integration Example:**
-```python
-# In security_scanner.py
-from subdomain_finder import enumerate_subdomains
-
-# If user provides domain
-if is_domain(input_arg):
-    results = enumerate_subdomains(domain)
-    subdomains_to_scan = results['active']
-    
-    print(f"✅ Found {len(subdomains_to_scan)} active subdomains")
-    
-    # Proceed with security scanning
-    for subdomain in subdomains_to_scan:
-        scan_security(subdomain)
-```
+   - Run relevant security checks (106 parameters, context-aware)
+   - Calculate adaptive scores (only applicable checks count)
+   - Write results incrementally to Excel (low memory, real-time updates)
+5. **Generate 5-sheet Excel report:**
+   - Security Results (detailed scores per subdomain)
+   - Summary By Type (statistics by subdomain category)
+   - Discovery Stats (total discovered, active, sources breakdown, tech counts)
+   - Technologies (tech stack per subdomain)
+   - Checklist (all 106 security controls reference)
+6. **Display final summary** by type with comprehensive statistics
 
 ---
 
