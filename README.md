@@ -48,15 +48,12 @@ This repository provides two Python scripts for comprehensive subdomain security
 - ✅ HTTP/HTTPS availability testing
 - ✅ Classification (all/active/created-but-not-active)
 
-### Security Assessment (20-Item Checklist)
-- ✅ **TLS/Certificate Analysis** (sslyze) - TLS 1.2+, valid certs, cipher strength
-- ✅ **Security Headers** (OWASP) - CSP, HSTS, X-Frame-Options, etc.
-- ✅ **DNS Security** (dnspython) - DNSSEC, SPF records
-- ✅ **Configuration** - SRI, secure cookies, cache control
-- ✅ **Information Disclosure** - Server version leakage
-- ✅ **Binary Pass/Fail** scoring with weighted categories
-- ✅ **Security Compliance Score** (0-100) for ranking
-- ✅ **Excel Export** with 3 sheets (results, checklist, methodology)
+
+### Security Assessment (106-Parameter Dynamic Checklist)
+- ✅ **Comprehensive 106-parameter checklist** covering TLS, headers, authentication, input validation, access control, API, cloud, DNS, logging, compliance, and more
+- ✅ **Context-aware scanning**: Each subdomain is classified (webapp, API, static, other) and only relevant checks are applied
+- ✅ **Dynamic scoring**: Only applicable checks are scored for each subdomain, with clear pass/fail and context-aware total
+- ✅ **Excel Export** with all relevant checks, subdomain type, and summary by type
 
 ### Ethical & Research-Friendly
 - ✅ Rate-limiting (3s per request) to prevent DoS
@@ -131,7 +128,7 @@ python security_scanner.py --file example.com_active.txt
 # Step 3: Open website_ranking.xlsx and analyze results!
 ```
 
-**Note:** The scanner works with `.txt` or `.xlsx` files containing subdomains from **any domain** (.com, .org, .edu, .gov, .ac.lk, etc.)
+**Note:** The scanner works with `.txt` or `.xlsx` files containing subdomains from **any domain** (.com, .org, .edu, .gov, etc.)
 
 ---
 
@@ -219,79 +216,147 @@ python security_scanner.py --file company_subdomains.xlsx
 
 ---
 
+
 ## 🔐 Security Checklist
 
-### 20-Item Security Assessment
+### www and non-www Checks
 
-The scanner evaluates each subdomain against 20 controls aligned with OWASP, NIST SP 800-52, and industry best practices.
+The scanner automatically tests both `www.example.com` and `example.com` for each subdomain, recording results for both if they resolve. This ensures you know if a domain is only secure (or only available) with or without the `www` prefix.
 
-### High Priority (4 controls) - Critical Security
-| ID | Control | Description |
-|----|---------|-------------|
-| **TLS-1** | TLS 1.2+ Enforced | No TLS 1.0/1.1 allowed |
-| **CERT-1** | Valid Certificate | Trusted CA, not expired, valid chain |
-| **HTTPS-1** | HTTPS Enforced | HTTP redirects to HTTPS (301/302) |
-| **HSTS-1** | HSTS Configured | max-age ≥31536000 + includeSubDomains |
+### 106-Parameter Security Assessment Table
 
-### Medium Priority (8 controls) - Important Protections
-| ID | Control | Description |
-|----|---------|-------------|
-| **CSP-1** | Content Security Policy | CSP header present |
-| **XFO-1** | X-Frame-Options | DENY or SAMEORIGIN |
-| **XCTO-1** | X-Content-Type-Options | nosniff |
-| **XXP-1** | X-XSS-Protection | 1; mode=block |
-| **RP-1** | Referrer-Policy | strict-origin-when-cross-origin or stricter |
-| **PP-1** | Permissions-Policy | Present and configured |
-| **FS-1** | Forward Secrecy | ECDHE/DHE cipher suites |
-| **WC-1** | No Weak Ciphers | No RC4/3DES/NULL/EXPORT |
+Below is the **complete table** of all 106 security parameters, including IDs, priorities, descriptions, feasibility with this stack, reference/standard, and direct links to resources:
 
-### Low Priority (8 controls) - Best Practices
-| ID | Control | Description |
-|----|---------|-------------|
-| **SR-1** | Subresource Integrity | SRI on external scripts |
-| **COO-1** | Secure Cookies | Secure + HttpOnly flags |
-| **SI-1** | Server Info | No version disclosure |
-| **DNS-1** | DNSSEC | DS records present |
-| **SPF-1** | SPF Record | Email validation configured |
-| **HPKP-1** | HPKP Absent | Deprecated, should be absent |
-| **ETag-1** | ETag Security | Not timestamp-based |
-| **Cache-1** | Cache Control | no-store on sensitive pages |
+| # | Main Section | ID | Priority | Description | Feasible? | Reference/Standard | Link |
+|---|--------------|-----|----------|-------------|-----------|-------------------|------|
+| 1 | TLS & Certificate Security | TLS-1 | High | TLS 1.2+ enforced | ✅ (sslyze) | OWASP TLS Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html) |
+| 2 | | CERT-1 | High | Valid cert chain | ✅ (sslyze) | RFC 5280 (X.509) | [Link](https://tools.ietf.org/html/rfc5280) |
+| 3 | | FS-1 | Medium | Forward secrecy (ECDHE ciphers) | ✅ (sslyze) | OWASP TLS Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html) |
+| 4 | | WC-1 | Medium | No weak ciphers (RC4/3DES) | ✅ (sslyze) | NIST SP 800-52r2 | [Link](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-52r2.pdf) |
+| 5 | | TLS-2 | Medium | OCSP stapling enabled | ✅ (sslyze) | RFC 6960 (OCSP) | [Link](https://tools.ietf.org/html/rfc6960) |
+| 6 | | CERT-2 | Medium | Certificate transparency compliance | ✅ (sslyze) | RFC 6962 | [Link](https://tools.ietf.org/html/rfc6962) |
+| 7 | | HSTS-2 | High | HSTS preload directive enabled | ✅ (requests) | OWASP HSTS Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html) |
+| 8 | HTTP Headers & Protocols | HTTPS-1 | High | HTTPS enforced (HTTP → HTTPS redirect) | ✅ (requests) | OWASP HTTPS Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html) |
+| 9 | | HSTS-1 | High | HSTS max-age ≥31536000 + includeSubDomains | ✅ (requests) | RFC 6797 (HSTS) | [Link](https://tools.ietf.org/html/rfc6797) |
+| 10 | | CSP-1 | Medium | CSP present (non-empty) | ✅ (requests) | OWASP CSP Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html) |
+| 11 | | XFO-1 | Medium | X-Frame-Options: DENY/SAMEORIGIN | ✅ (requests) | OWASP Clickjacking Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html) |
+| 12 | | XCTO-1 | Medium | X-Content-Type-Options: nosniff | ✅ (requests) | OWASP Header Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html) |
+| 13 | | XXP-1 | Medium | X-XSS-Protection: 1; mode=block | ✅ (requests) | OWASP XSS Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/XSS_Prevention_Cheat_Sheet.html) |
+| 14 | | RP-1 | Medium | Referrer-Policy: strict-origin-when-cross-origin or stricter | ✅ (requests) | W3C Referrer Policy | [Link](https://w3c.github.io/webappsec-referrer-policy/) |
+| 15 | | PP-1 | Medium | Permissions-Policy present (non-empty) | ✅ (requests) | W3C Permissions Policy | [Link](https://w3c.github.io/webappsec-permissions-policy/) |
+| 16 | | HEADER-1 | Low | Clear-Site-Data header present | ✅ (requests) | W3C Clear-Site-Data | [Link](https://w3c.github.io/webappsec-clear-site-data/) |
+| 17 | | HEADER-2 | Medium | Cross-Origin-Opener-Policy: same-origin | ✅ (requests) | W3C COOP | [Link](https://html.spec.whatwg.org/multipage/origin.html#cross-origin-opener-policy) |
+| 18 | | HEADER-3 | Medium | Cross-Origin-Embedder-Policy: require-corp | ✅ (requests) | W3C COEP | [Link](https://html.spec.whatwg.org/multipage/origin.html#cross-origin-embedder-policy) |
+| 19 | | CORS-1 | Medium | Restrictive CORS (Access-Control-Allow-Origin ≠ "*") | ✅ (requests) | OWASP CORS Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) |
+| 20 | | WAF-1 | Medium | WAF presence (e.g., X-WAF/Cloudflare headers) | ✅ (requests) | OWASP WAF Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Web_Application_Firewall_Cheat_Sheet.html) |
+| 21 | | REPORT-1 | Low | Report-To header for security reports | ✅ (requests) | W3C Reporting API | [Link](https://w3c.github.io/reporting/) |
+| 22 | | HEADER-5 | Medium | Cross-Origin-Resource-Policy: same-site | ✅ (requests) | W3C CORP | [Link](https://fetch.spec.whatwg.org/#cross-origin-resource-policy-header) |
+| 23 | | HEADER-6 | Low | Remove Server/X-Powered-By headers | ✅ (requests) | OWASP Header Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html) |
+| 24 | Authentication & Session Management | COO-1 | Low | Cookies Secure/HttpOnly | ✅ (requests) | OWASP Session Management Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) |
+| 25 | | AUTH-1 | High | Session timeout ≤30 minutes | ⚠️ (requests + timing) | OWASP Session Management Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) |
+| 26 | | AUTH-2 | High | CSRF tokens on state-changing operations | ✅ (requests + bs4) | OWASP CSRF Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) |
+| 27 | | AUTH-3 | Medium | No autocomplete on password fields | ✅ (requests + bs4) | OWASP Authentication Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) |
+| 28 | | SESSION-1 | Medium | Session cookie regenerated on login | ⚠️ (requests + session) | OWASP Session Management Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) |
+| 29 | | SAMESITE-1 | Medium | Cookies with SameSite=Lax/Strict | ✅ (requests) | OWASP SameSite Cookie Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/SameSite_Cookie_Cheat_Sheet.html) |
+| 30 | | AUTH-4 | High | Multi-Factor Authentication (MFA) for privileged accounts | ⚠️ (requests + auth flow) | OWASP MFA Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html) |
+| 31 | | AUTH-5 | High | Account lockout/exponential backoff on failed logins | ⚠️ (requests + auth flow) | OWASP Authentication Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) |
+| 32 | | AUTH-6 | Medium | No username enumeration in login errors | ✅ (requests) | OWASP Authentication Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) |
+| 33 | | AUTH-7 | Medium | Password policy: complexity, rotation, or passkey support | ⚠️ (policy review) | NIST SP 800-63B | [Link](https://pages.nist.gov/800-63-3/sp800-63b.html) |
+| 34 | Input Validation & Sanitization | INPUT-1 | High | SQL injection protection | ⚠️ (basic payload testing) | OWASP SQL Injection Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html) |
+| 35 | | INPUT-2 | High | XSS protection (reflects user input safely) | ⚠️ (basic XSS testing) | OWASP XSS Prevention Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/XSS_Prevention_Cheat_Sheet.html) |
+| 36 | | INPUT-3 | Medium | File upload restrictions | ⚠️ (if upload forms detected) | OWASP File Upload Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) |
+| 37 | | INPUT-4 | Medium | Path traversal prevention | ⚠️ (basic path testing) | OWASP Path Traversal Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Path_Traversal_Cheat_Sheet.html) |
+| 38 | | INPUT-5 | High | OS/Command injection protection | ⚠️ (payload testing) | OWASP Command Injection Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html) |
+| 39 | | INPUT-6 | High | LDAP/NoSQL/Template injection protection | ⚠️ (payload testing) | OWASP Injection Prevention Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html) |
+| 40 | | INPUT-7 | High | SSRF protection | ⚠️ (URL parameter testing) | OWASP SSRF Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html) |
+| 41 | | INPUT-8 | Medium | File upload malware scanning and execution prevention | ⚠️ (file handling) | OWASP File Upload Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) |
+| 42 | | INPUT-9 | Medium | Deserialization security | ⚠️ (code review) | OWASP Deserialization Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html) |
+| 43 | Access Control & Authorization | AUTHZ-1 | High | Access control (vertical privilege escalation) | ⚠️ (if multiple roles) | OWASP Access Control Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html) |
+| 44 | | AUTHZ-2 | High | IDOR protection | ⚠️ (parameter manipulation) | OWASP IDOR Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html) |
+| 45 | | AUTHZ-3 | High | Least privilege and RBAC enforcement | ⚠️ (role testing) | OWASP Access Control Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html) |
+| 46 | | AUTHZ-4 | High | Authorization checks on every request | ⚠️ (API/endpoint testing) | OWASP Access Control Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html) |
+| 47 | | AUTHZ-5 | High | IDOR and privilege escalation testing | ⚠️ (parameter manipulation) | OWASP IDOR Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html) |
+| 48 | | AUTHZ-6 | Medium | Business logic flaw testing | ⚠️ (flow testing) | OWASP Business Logic Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Business_Logic_Security_Cheat_Sheet.html) |
+| 49 | Security Headers & Browser Policies | HEADER-7 | Medium | Strict CSP (no unsafe-inline/unsafe-eval, all resource types) | ✅ (requests) | OWASP CSP Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html) |
+| 50 | Encryption & Data Protection | ENCRYPT-1 | High | Encryption at rest for sensitive data | ⚠️ (infrastructure review) | NIST SP 800-175B | [Link](https://csrc.nist.gov/publications/detail/sp/800-175b/final) |
+| 51 | | ENCRYPT-2 | Medium | Secure key management (no hard-coded keys) | ⚠️ (code review) | OWASP Cryptographic Storage Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html) |
+| 52 | Logging, Monitoring & Incident Response | LOG-1 | Low | Security logging presence | ⚠️ (check for log endpoints) | OWASP Logging Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) |
+| 53 | | LOG-2 | High | Comprehensive logging (auth, data access, admin actions) | ⚠️ (log review) | OWASP Logging Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) |
+| 54 | | LOG-3 | Medium | Intrusion detection and anomaly monitoring | ⚠️ (SIEM/IDS setup) | NIST SP 800-92 | [Link](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-92.pdf) |
+| 55 | | LOG-4 | Medium | Error handling (no stack traces exposed, logs sanitized) | ✅ (requests) | OWASP Error Handling Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html) |
+| 56 | Cloud & Infrastructure Security | CLOUD-1 | High | Secure IAM roles and least privilege | ⚠️ (cloud review) | CIS AWS Foundations Benchmark | [Link](https://www.cisecurity.org/benchmark/amazon_web_services/) |
+| 57 | | CLOUD-2 | Medium | Private subnets for databases, encrypted storage | ⚠️ (cloud review) | CIS Azure Foundations Benchmark | [Link](https://www.cisecurity.org/benchmark/microsoft_azure/) |
+| 58 | | CLOUD-3 | Medium | Container/VM security (non-root, patched, scanned) | ⚠️ (infrastructure review) | OWASP Container Security Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Container_Security_Cheat_Sheet.html) |
+| 59 | Email & DNS Security | DNS-1 | Low | DNSSEC (DS records) | ✅ (dnspython) | RFC 4033 (DNSSEC) | [Link](https://tools.ietf.org/html/rfc4033) |
+| 60 | | SPF-1 | Low | SPF TXT record | ✅ (dnspython) | RFC 7208 (SPF) | [Link](https://tools.ietf.org/html/rfc7208) |
+| 61 | | DMARC-1 | Low | DMARC TXT record exists | ✅ (dnspython) | RFC 7489 (DMARC) | [Link](https://tools.ietf.org/html/rfc7489) |
+| 62 | | DNS-2 | Low | CAA record present | ✅ (dnspython) | RFC 8659 (CAA) | [Link](https://tools.ietf.org/html/rfc8659) |
+| 63 | | MX-1 | Low | MX record configuration | ✅ (dnspython) | RFC 1035 (DNS) | [Link](https://tools.ietf.org/html/rfc1035) |
+| 64 | | DNS-3 | Medium | DKIM signing enabled | ✅ (dnspython) | RFC 6376 (DKIM) | [Link](https://tools.ietf.org/html/rfc6376) |
+| 65 | | DNS-4 | Medium | DMARC policy set to p=quarantine/reject | ✅ (dnspython) | RFC 7489 (DMARC) | [Link](https://tools.ietf.org/html/rfc7489) |
+| 66 | File & Directory Security | DIR-1 | Medium | No directory listing | ✅ (requests) | OWASP Directory Listing Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 67 | | ADMIN-1 | Medium | No exposed common admin paths | ✅ (requests) | OWASP Admin Interface Security | [Link](https://cheatsheetseries.owasp.org/) |
+| 68 | | ROBOTS-1 | Low | /robots.txt does not expose sensitive paths | ✅ (requests) | OWASP Robots.txt Security | [Link](https://cheatsheetseries.owasp.org/) |
+| 69 | | SEC-1 | Low | /.well-known/security.txt exists | ✅ (requests) | RFC 9116 (security.txt) | [Link](https://tools.ietf.org/html/rfc9116) |
+| 70 | | BACKUP-1 | Medium | No backup files exposed (.bak, .old, .tmp) | ✅ (requests) | OWASP Backup File Exposure Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 71 | | GIT-1 | High | No .git directory exposed | ✅ (requests) | OWASP Git Exposure Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 72 | | CONFIG-1 | High | No config files exposed (.env, config.json) | ✅ (requests) | OWASP Config File Exposure Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 73 | Information Disclosure | SI-1 | Low | No server info leakage | ✅ (requests) | OWASP Information Leakage Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 74 | | TITLE-1 | Low | Page title not default | ✅ (requests + bs4) | OWASP Default Page Security | [Link](https://cheatsheetseries.owasp.org/) |
+| 75 | | ETag-1 | Low | ETag not timestamp-based | ✅ (requests) | OWASP ETag Security | [Link](https://cheatsheetseries.owasp.org/) |
+| 76 | | ERROR-1 | Medium | No stack traces in error pages | ✅ (requests) | OWASP Error Handling Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html) |
+| 77 | | HEADER-4 | Low | No version disclosure in headers | ✅ (requests) | OWASP Header Security | [Link](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html) |
+| 78 | | ERROR-2 | Medium | Custom error pages (no verbose details) | ✅ (requests) | OWASP Error Handling Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html) |
+| 79 | Performance & Cache Security | Cache-1 | Low | Cache-Control: no-store on root | ✅ (requests) | OWASP Cache Control Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/) |
+| 80 | | CACHE-2 | Low | No cache on sensitive pages | ✅ (requests) | OWASP Cache Control Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/) |
+| 81 | Redirect & Navigation Security | REDIR-1 | Medium | No open redirect vulnerabilities | ⚠️ (requests) | OWASP Open Redirect Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 82 | | REDIR-2 | Medium | Relative URLs used (not absolute) | ✅ (requests + bs4) | OWASP URL Redirect Security | [Link](https://cheatsheetseries.owasp.org/) |
+| 83 | Content & Resource Security | SR-1 | Low | SRI on external scripts | ⚠️ (bs4 + regex) | OWASP Subresource Integrity Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Subresource_Integrity_Cheat_Sheet.html) |
+| 84 | | SRI-2 | Low | External resources from trusted CDNs | ✅ (requests + bs4) | OWASP CDN Security | [Link](https://cheatsheetseries.owasp.org/) |
+| 85 | | MIME-1 | Low | Correct Content-Type headers | ✅ (requests) | OWASP Content-Type Security | [Link](https://cheatsheetseries.owasp.org/) |
+| 86 | | MIXED-1 | Medium | No mixed active content on HTTPS | ✅ (bs4) | OWASP Mixed Content Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 87 | | THIRD-1 | Low | Limited risky third-party scripts | ✅ (bs4) | OWASP Third-Party JavaScript Security | [Link](https://cheatsheetseries.owasp.org/) |
+| 88 | API & Modern Web Features | API-1 | Medium | Rate limiting on endpoints | ⚠️ (requests + timing) | OWASP Rate Limiting Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/) |
+| 89 | | API-2 | Medium | JSON encoding safe (no XSS) | ✅ (requests) | OWASP JSON Security Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/) |
+| 90 | | HTTP2-1 | Low | HTTP/2 or HTTP/3 support | ✅ (requests) | RFC 9113 (HTTP/2) | [Link](https://tools.ietf.org/html/rfc9113) |
+| 91 | Advanced Security Controls | AUTHZ-1 | High | Access control (vertical privilege escalation) | ⚠️ (if multiple roles) | OWASP Access Control Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html) |
+| 92 | | AUTHZ-2 | High | IDOR protection | ⚠️ (parameter manipulation) | OWASP IDOR Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html) |
+| 93 | | LOG-1 | Low | Security logging presence | ⚠️ (check for log endpoints) | OWASP Logging Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) |
+| 94 | Compliance & Standards | COMP-1 | Low | Privacy policy accessible | ✅ (requests) | GDPR Compliance Guide | [Link](https://gdpr-info.eu/) |
+| 95 | | COMP-2 | Low | GDPR compliance indicators | ✅ (requests + bs4) | GDPR Compliance Guide | [Link](https://gdpr-info.eu/) |
+| 96 | | COMP-3 | Low | Accessibility security (WCAG) | ⚠️ (basic checks) | WCAG 2.1 Guidelines | [Link](https://www.w3.org/TR/WCAG21/) |
+| 97 | Subdomain Security | SUB-1 | High | No unmanaged or forgotten subdomains | ✅ (requests + dnspython) | OWASP Subdomain Takeover Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 98 | | SUB-2 | High | No subdomain takeover risks | ✅ (requests + dnspython) | OWASP Subdomain Takeover Prevention | [Link](https://cheatsheetseries.owasp.org/) |
+| 99 | WAF & DDoS Protection | WAF-2 | Medium | WAF actively blocks malicious requests | ✅ (requests) | OWASP WAF Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Web_Application_Firewall_Cheat_Sheet.html) |
+| 100 | | DDoS-1 | Medium | DDoS protection (e.g., Cloudflare, AWS Shield) | ✅ (requests) | OWASP DDoS Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/) |
+| 101 | Server & Infrastructure Security | SERVER-1 | Medium | Server software is up-to-date | ✅ (requests) | CIS Benchmarks | [Link](https://www.cisecurity.org/cis-benchmarks/) |
+| 102 | Third-Party & Supply Chain Security | THIRD-2 | Medium | Regularly audit third-party libraries for vulnerabilities | ✅ (requests) | OWASP Dependency Check | [Link](https://owasp.org/www-project-dependency-check/) |
+| 103 | | THIRD-3 | Medium | Subresource Integrity (SRI) for all third-party scripts/styles | ✅ (requests + bs4) | OWASP SRI Cheat Sheet | [Link](https://cheatsheetseries.owasp.org/cheatsheets/Subresource_Integrity_Cheat_Sheet.html) |
+| 104 | Compliance & Documentation | COMP-4 | Medium | Incident response plan documented and tested | ⚠️ (policy review) | NIST SP 800-61 | [Link](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf) |
+| 105 | | COMP-5 | Medium | Software Bill of Materials (SBOM) maintained | ⚠️ (tooling) | NTIA SBOM Guide | [Link](https://www.ntia.doc.gov/files/ntia/publications/sbom_minimum_elements_report.pdf) |
+| 106 | | COMP-6 | Low | Cookie consent banner is present and functional | ✅ (requests + bs4) | GDPR Cookie Consent Guide | [Link](https://gdpr-info.eu/) |
+
+Each parameter is mapped to a global standard or research paper with direct links, so you know exactly what is being checked and why it matters.
+
+### Marking/Scoring System
+
+- Each check is scored as Pass (100) or Fail (0) for each subdomain (and for both www/non-www if both resolve).
+- Only relevant checks for the detected subdomain type are included in the score.
+- The Excel output includes all relevant columns, with clear pass/fail, and a summary by type.
 
 ---
 
 ## 📊 Scoring Methodology
 
-### Weighted Category Scoring
 
-Each control receives binary scoring: **Pass (100 points)** or **Fail (0 points)**
+### Dynamic, Context-Aware Scoring
 
-Category scores are computed as: `(passes / total_controls) × weight`
+- Each subdomain is classified (webapp, API, static, other) and only relevant controls are scored.
+- Each control receives binary scoring: **Pass (100 points)** or **Fail (0 points)**
+- The final score is the percentage of relevant controls passed for that subdomain.
+- The Excel output includes a summary by type (average, median, min, max scores for each type).
 
-| Category | Weight | Controls | Max Points |
-|----------|--------|----------|------------|
-| **Encryption/TLS** | 25% | TLS-1, CERT-1, HTTPS-1, HSTS-1, FS-1, WC-1 (6) | 25 |
-| **Secure Headers** | 30% | CSP-1, XFO-1, XCTO-1, XXP-1, RP-1, PP-1 (6) | 30 |
-| **Config Protections** | 20% | SR-1, COO-1, HPKP-1, ETag-1, Cache-1 (5) | 20 |
-| **Info Disclosure** | 10% | SI-1 (1) | 10 |
-| **DNS/Email** | 15% | DNS-1, SPF-1 (2) | 15 |
-| **TOTAL** | **100%** | **20 controls** | **100** |
-
-### Example Calculation
-
-**Subdomain:** `portal.university.ac.lk`
-
-```
-Encryption/TLS:    5/6 pass → (5/6) × 25 = 20.83 points
-Secure Headers:    4/6 pass → (4/6) × 30 = 20.00 points
-Config Protections: 3/5 pass → (3/5) × 20 = 12.00 points
-Info Disclosure:   1/1 pass → (1/1) × 10 = 10.00 points
-DNS/Email:         1/2 pass → (1/2) × 15 =  7.50 points
-────────────────────────────────────────────────────
-Total Score: 70.33 / 100
-```
-
-### Score Interpretation
-
+**Score Interpretation:**
 | Score Range | Security Level | Interpretation |
 |-------------|----------------|----------------|
 | **80-100** | 🟢 **Strong** | Excellent security posture, most controls implemented |
@@ -302,32 +367,27 @@ Total Score: 70.33 / 100
 
 ## 📁 Output Files
 
+
 ### Primary Output: `website_ranking.xlsx`
 
-Excel file with **3 sheets**:
+Excel file with **multiple sheets**:
 
-#### Sheet 1: Security Ranking
-Ranked table of all scanned subdomains with:
+#### Sheet 1: Security Results
+Table of all scanned subdomains with:
 - **Subdomain** - Domain name
-- **Rank** - Position (1 = highest score)
-- **Total_Score** - Security Compliance Score (0-100)
+- **Type** - Detected type (webapp, API, static, other)
+- **Total_Score** - Security Compliance Score (0-100, context-aware)
 - **Scan_Success** - Whether HTTPS connection succeeded
-- **High/Medium/Low_Priority_Passes** - Control pass counts (e.g., "3/4")
-- **Individual Controls** - 20 columns (TLS-1_Pass, CERT-1_Pass, etc.) showing "Yes"/"No"
-- **Category Scores** - 5 columns showing points per category
+- **Relevant Controls** - Only columns for checks relevant to that subdomain type (e.g., TLS-1_Pass, CORS-1_Pass, etc.)
 
-#### Sheet 2: Checklist
-Reference table of all 20 controls with:
+#### Sheet 2: Summary By Type
+Summary table with average, median, min, max scores for each subdomain type.
+
+#### Sheet 3: Checklist
+Reference table of all 106 controls with:
 - Control ID
 - Priority level
 - Description
-
-#### Sheet 3: Categories
-Scoring methodology with:
-- Category name
-- Weight percentage
-- Controls included
-- Check count
 
 ### Other Files
 
@@ -647,9 +707,10 @@ python security_scanner.py --file company_subdomains.txt
 
 ---
 
-**� Universal:** This toolkit works with any domain or TLD (.com, .org, .edu, .gov, .ac.lk, etc.)  
+
+**🌍 Universal:** This toolkit works with any domain or TLD (.com, .org, .edu, .gov, .ac.lk, etc.)  
 **🔒 Ethics:** Only scan domains you own or have explicit permission to test  
-**📊 Output:** Comprehensive Excel reports with security scores and detailed checklist results
+**📊 Output:** Comprehensive Excel reports with dynamic, context-aware scoring and detailed checklist results
 
 ---
 
