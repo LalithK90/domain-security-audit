@@ -1,0 +1,9 @@
+# Security Scanner Dependencies
+requests>=2.28
+pandas>=1.5
+openpyxl>=3.0
+sslyze>=6.0.0
+dnspython>=2.3.0
+beautifulsoup4>=4.11.0
+tqdm>=4.65.0
+cryptography>=41.0.0

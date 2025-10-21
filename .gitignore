@@ -28,14 +28,6 @@ build/
 dist/
 *.egg-info/
 
-# Data and outputs
-*_audit.csv
-*_audit.xlsx
-*_security_checklist.xlsx
-*_security_checklist.csv
-*_active.txt
-*_all.txt
-*_created_not_active.txt
 
 # Logs
 *.log
@@ -57,6 +49,5 @@ pip-wheel-metadata/
 # macOS
 .DS_Store
 
-
-*.txt
-*.csv
+# Backups
+backup/
