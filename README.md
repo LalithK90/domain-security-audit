@@ -1,302 +1,656 @@
-# ac-lk-network-audit
+# Subdomain Security Scanner & Auditor
 
-A comprehensive subdomain enumeration and security audit toolkit for network reconnaissance and security assessment.
+**Universal Comprehensive Subdomain Security Assessment Toolkit**
+
+A Python toolkit for subdomain enumeration and comprehensive security assessment of any domain, featuring automated 20-item security checklist, weighted scoring (0-100), and ranked Excel reports. Works with any TLD (.com, .org, .edu, .gov, .ac.lk, etc.).
+
+---
 
 ## 📋 Table of Contents
 - [Overview](#overview)
+- [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [Usage Guide](#usage-guide)
-- [Security Audit Workflow](#security-audit-workflow)
+- [Quick Start](#quick-start)
+- [Detailed Usage](#detailed-usage)
+- [Security Checklist](#security-checklist)
+- [Scoring Methodology](#scoring-methodology)
 - [Output Files](#output-files)
-- [Repository Feedback](#repository-feedback)
+- [Research Use Cases](#research-use-cases)
+- [Troubleshooting](#troubleshooting)
+- [Ethical Considerations](#ethical-considerations)
+- [Contributing](#contributing)
+
+---
 
 ## 🔍 Overview
 
-This repository provides a suite of Python tools for:
-- **Subdomain enumeration** using passive (crt.sh) and active (DNS probing) techniques
-- **Host auditing** to collect HTTP headers, server information, and technology fingerprints
-- **Security checklist generation** with comprehensive DNS, WHOIS, and security assessment data
+This repository provides two Python scripts for comprehensive subdomain security assessment:
+
+1. **`subdomain_handler.py`** - Subdomain enumeration using passive (crt.sh) and active (DNS) techniques
+2. **`security_scanner.py`** - Universal 20-item security checklist scanner with weighted scoring
+
+**Use Cases:**
+- 🔒 Security auditing of any domain or subdomain set
+- 🏢 Enterprise security posture assessment
+- 🎓 Educational institution cybersecurity research
+- 📊 Comparative security analysis across multiple domains
+- 📈 Compliance benchmarking and scoring
+- 🌐 Multi-domain security audits for any TLD
+
+---
+
+## ✨ Features
+
+### Subdomain Enumeration
+- ✅ Passive discovery via Certificate Transparency (crt.sh)
+- ✅ Active DNS probing of common subdomains
+- ✅ HTTP/HTTPS availability testing
+- ✅ Classification (all/active/created-but-not-active)
+
+### Security Assessment (20-Item Checklist)
+- ✅ **TLS/Certificate Analysis** (sslyze) - TLS 1.2+, valid certs, cipher strength
+- ✅ **Security Headers** (OWASP) - CSP, HSTS, X-Frame-Options, etc.
+- ✅ **DNS Security** (dnspython) - DNSSEC, SPF records
+- ✅ **Configuration** - SRI, secure cookies, cache control
+- ✅ **Information Disclosure** - Server version leakage
+- ✅ **Binary Pass/Fail** scoring with weighted categories
+- ✅ **Security Compliance Score** (0-100) for ranking
+- ✅ **Excel Export** with 3 sheets (results, checklist, methodology)
+
+### Ethical & Research-Friendly
+- ✅ Rate-limiting (3s per request) to prevent DoS
+- ✅ Passive scanning (no exploitation attempts)
+- ✅ Graceful error handling
+- ✅ Detailed progress reporting
+- ✅ Statistical summary output
+
+---
 
 ## 🛠️ Prerequisites
 
-Before running the scripts, ensure you have:
+**System Requirements:**
+- Python 3.8 or higher
+- Internet connection (for scanning and crt.sh queries)
 
-- **Python 3.8+** (preferably in a virtual environment)
-- **pip** package manager
-- **dig** command-line tool (for DNS lookups)
-- **whois** command-line tool (for domain registration info)
+**Optional (for subdomain_handler.py):**
+- `dig` command (DNS lookups) - usually pre-installed on macOS/Linux
+- `whois` command (domain info) - usually pre-installed on macOS/Linux
 
-### Verify Prerequisites
-
+**Verify Prerequisites:**
 ```bash
-python --version  # Should be 3.8 or higher
-dig -v           # Should display ISC BIND version
-whois --version  # Should display whois version
+python3 --version  # Should show 3.8+
 ```
+
+---
 
 ## 📦 Installation
 
-1. **Clone the repository** (if not already done):
+### 1. Clone the Repository
 ```bash
-cd /path/to/ac-lk-network-audit
+git clone https://github.com/LalithK90/ac-lk-network-audit.git
+cd ac-lk-network-audit
 ```
 
-2. **Create a virtual environment** (recommended):
+### 2. Create Virtual Environment (Recommended)
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # On macOS/Linux
+# venv\Scripts\activate  # On Windows
 ```
 
-3. **Install Python dependencies**:
+### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-This installs:
-- `requests` - For HTTP requests and API calls
-- `pandas` - For data manipulation and CSV/Excel output
-- `openpyxl` - For Excel file generation
-
-## 🚀 Usage Guide
-
-### Step 1: Subdomain Enumeration
-
-Run the subdomain enumerator to discover and classify subdomains:
-
-```bash
-python subdomain_enumerator.py
-```
-
-**What it does:**
-- Queries crt.sh (Certificate Transparency logs) for passive subdomain discovery
-- Probes common subdomain names (www, mail, api, dev, etc.)
-- Tests DNS resolution for discovered hosts
-- Checks HTTP/HTTPS availability
-- Classifies subdomains into categories
-
-**Configuration:**
-- Edit the `domain` variable in the `main()` function of `subdomain_enumerator.py` to change the target domain
-- Default: `domain = "oeducat.org"`
-
-**Output files:**
-- `<domain>_all.txt` - All discovered subdomains
-- `<domain>_active.txt` - Subdomains responding to HTTP/HTTPS
-- `<domain>_created_not_active.txt` - Discovered but not active subdomains
-
-**Alternative:** You can also use `subdomain_handler.py` (duplicate functionality).
-
-### Step 2: Subdomain Auditing
-
-Perform detailed auditing of active subdomains:
-
-```bash
-python subdomain_audit.py oeducat.org
-```
-
-Or specify the active file directly:
-
-```bash
-python subdomain_audit.py oeducat.org_active.txt
-```
-
-**What it does:**
-- Reads active subdomains from `<domain>_active.txt`
-- Resolves IP addresses (A/AAAA records)
-- Probes HTTP/HTTPS endpoints
-- Extracts server headers (Server, X-Powered-By)
-- Captures page titles
-- Detects common technologies (WordPress, Shopify, Cloudflare, etc.)
-
-**Output files:**
-- `<domain>_audit.csv` - Audit results in CSV format
-- `<domain>_audit.xlsx` - Excel format (if openpyxl installed)
-
-### Step 3: Security Checklist Generation
-
-Build a comprehensive security assessment spreadsheet:
-
-```bash
-python build_security_checklist.py oeducat.org_audit.csv
-```
-
-**What it does:**
-- Reads audit CSV from Step 2
-- Performs DNS lookups (A, AAAA, CNAME, MX, TXT, NS, SOA, PTR, CAA records)
-- Retrieves WHOIS information (registrar, creation/expiration dates)
-- Identifies hosting provider and ASN
-- Detects CDN/WAF services
-- Prepares columns for manual security testing (TLS, headers, ports, etc.)
-
-**Output files:**
-- `<domain>_security_checklist.xlsx` - Comprehensive security checklist
-
-## 🔐 Security Audit Workflow
-
-Follow this order for a complete security audit:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    STEP 1: ENUMERATION                          │
-│  python subdomain_enumerator.py                                 │
-│  → Discovers all subdomains                                     │
-│  → Classifies by activity status                                │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                    STEP 2: AUDITING                             │
-│  python subdomain_audit.py oeducat.org                          │
-│  → Collects HTTP/HTTPS information                              │
-│  → Identifies technologies and servers                          │
-│  → Resolves IP addresses                                        │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                    STEP 3: SECURITY CHECKLIST                   │
-│  python build_security_checklist.py oeducat.org_audit.csv      │
-│  → Performs comprehensive DNS analysis                          │
-│  → Retrieves WHOIS and hosting info                             │
-│  → Generates security assessment spreadsheet                    │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                    STEP 4: MANUAL REVIEW                        │
-│  Review the security checklist Excel file and:                  │
-│  • Test SSL/TLS configuration (sslyze, testssl.sh)              │
-│  • Scan for open ports (nmap)                                   │
-│  • Check security headers (securityheaders.com)                 │
-│  • Test for vulnerabilities (OWASP ZAP, Burp Suite)             │
-│  • Verify WAF/CDN configuration                                 │
-│  • Check for subdomain takeover risks                           │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Recommended Audit Order
-
-1. **Reconnaissance Phase** (Step 1)
-   - Discover all subdomains
-   - Identify attack surface
-
-2. **Information Gathering** (Step 2)
-   - Collect technical details
-   - Identify technologies and versions
-
-3. **Assessment Preparation** (Step 3)
-   - Build comprehensive asset inventory
-   - Prepare structured checklist
-
-4. **Security Testing** (Manual)
-   - TLS/SSL analysis
-   - Port scanning
-   - Vulnerability assessment
-   - Configuration review
-
-## 📊 Output Files
-
-| File | Description | Generated By |
-|------|-------------|--------------|
-| `<domain>_all.txt` | All discovered subdomains | subdomain_enumerator.py |
-| `<domain>_active.txt` | HTTP/HTTPS active subdomains | subdomain_enumerator.py |
-| `<domain>_created_not_active.txt` | Inactive subdomains | subdomain_enumerator.py |
-| `<domain>_audit.csv` | Detailed audit data (CSV) | subdomain_audit.py |
-| `<domain>_audit.xlsx` | Detailed audit data (Excel) | subdomain_audit.py |
-| `<domain>_security_checklist.xlsx` | Comprehensive security checklist | build_security_checklist.py |
-
-## 📝 Repository Feedback
-
-### ✅ Strengths
-
-1. **Well-structured workflow**: Clear progression from enumeration → audit → checklist
-2. **Comprehensive documentation**: Good inline comments and docstrings in Python files
-3. **Multiple output formats**: CSV and Excel for flexibility
-4. **Concurrent execution**: Uses ThreadPoolExecutor for efficient parallel processing
-5. **Error handling**: Graceful handling of timeouts and failures
-6. **Technology detection**: Basic fingerprinting for common platforms
-7. **Multi-source enumeration**: Combines passive (crt.sh) and active (DNS) techniques
-
-### 🔧 Areas for Improvement
-
-1. **Configuration Management**
-   - Currently requires editing Python files to change the target domain
-   - **Recommendation**: Use command-line arguments or configuration files
-   ```python
-   # Example improvement:
-   import argparse
-   parser = argparse.ArgumentParser()
-   parser.add_argument('domain', help='Target domain to scan')
-   args = parser.parse_args()
-   ```
-
-2. **Code Duplication**
-   - `subdomain_enumerator.py` and `subdomain_handler.py` appear to be duplicates
-   - **Recommendation**: Remove duplicate file or clarify purpose
-
-3. **Rate Limiting**
-   - No rate limiting for HTTP requests
-   - **Recommendation**: Add delays or respect rate limits to avoid overwhelming targets
-
-4. **TLS/SSL Analysis**
-   - Security checklist has placeholders for SSL/TLS info
-   - **Recommendation**: Integrate `sslyze` or `ssl` module for certificate analysis
-
-5. **Logging**
-   - Limited logging for debugging
-   - **Recommendation**: Implement Python logging module with different verbosity levels
-
-6. **Testing**
-   - No unit tests present
-   - **Recommendation**: Add tests for core functions
-
-7. **Security Headers Check**
-   - Placeholders exist but not implemented
-   - **Recommendation**: Add checks for CSP, HSTS, X-Frame-Options, etc.
-
-8. **Subdomain Takeover Detection**
-   - Mentioned but not implemented
-   - **Recommendation**: Add CNAME validation against known vulnerable services
-
-### 🎯 Suggested Enhancements
-
-1. Add JSON output format for easier integration with other tools
-2. Implement retry logic with exponential backoff for API calls
-3. Add progress bars (using `tqdm`) for long-running operations
-4. Create a unified CLI with subcommands (using `click` or `argparse`)
-5. Add Docker support for easy deployment
-6. Implement database storage option (SQLite) for historical tracking
-7. Add report generation with executive summary
-
-### ⚠️ Security Considerations
-
-- **Authorization Required**: Only scan domains you own or have explicit permission to test
-- **Legal Compliance**: Port scanning and enumeration may be illegal without authorization
-- **Rate Limits**: Be respectful of third-party services (crt.sh, DNS servers)
-- **Data Privacy**: Handle collected data responsibly and securely
-
-### 📈 Overall Assessment
-
-**Score: 7.5/10**
-
-This is a **solid, functional security audit toolkit** with clear documentation and practical utility. The code is well-organized with good separation of concerns. It's particularly useful for:
-- Security professionals conducting authorized assessments
-- System administrators managing large domain portfolios
-- DevOps teams performing infrastructure audits
-
-The main improvements needed are around configurability, completeness of security checks, and eliminating code duplication. With the suggested enhancements, this could easily become a production-ready enterprise tool.
-
-## 📄 License & Ethics
-
-**⚠️ IMPORTANT**: This tool is for authorized security testing only. Unauthorized scanning may violate:
-- Computer Fraud and Abuse Act (CFAA)
-- Computer Misuse Act
-- Local cybersecurity laws
-
-Always obtain written permission before scanning networks or systems you don't own.
-
-## 🤝 Contributing
-
-Contributions are welcome! Consider implementing any of the suggested improvements above.
+**Dependencies installed:**
+- `requests` - HTTP requests
+- `pandas` - Data manipulation & Excel
+- `openpyxl` - Excel file generation
+- `sslyze` - TLS/certificate analysis
+- `dnspython` - DNS validation
+- `beautifulsoup4` - HTML parsing
+- `tqdm` - Progress bars
 
 ---
 
-**Last Updated**: October 2025
+## 🚀 Quick Start
 
+### 3-Step Workflow
+
+```bash
+# Step 1: Enumerate subdomains for your target domain (edit domain in script first)
+python subdomain_handler.py
+# Example output: example.com_active.txt
+
+# Step 2: Run security scanner on discovered subdomains
+python security_scanner.py --file example.com_active.txt
+# Output: website_ranking.xlsx
+
+# Step 3: Open website_ranking.xlsx and analyze results!
+```
+
+**Note:** The scanner works with `.txt` or `.xlsx` files containing subdomains from **any domain** (.com, .org, .edu, .gov, .ac.lk, etc.)
+
+---
+
+## 📖 Detailed Usage
+
+### Part 1: Subdomain Enumeration
+
+**File:** `subdomain_handler.py`
+
+**Configuration:**
+Edit the script and set your target domain:
+```python
+def main():
+    domain = "example.com"  # Change to your target domain
+    # Examples: "example.com", "university.edu", "company.org", etc.
+```
+
+**Run:**
+```bash
+python subdomain_handler.py
+```
+
+**Output Files:**
+- `<domain>_all.txt` - All discovered subdomains
+- `<domain>_active.txt` - HTTP/HTTPS responsive subdomains ✅
+- `<domain>_created_not_active.txt` - Discovered but inactive
+
+**What it does:**
+1. Queries crt.sh for SSL certificate history
+2. Probes common subdomains (www, mail, api, dev, portal, etc.)
+3. Tests DNS resolution for each subdomain
+4. Checks HTTP/HTTPS availability
+5. Classifies subdomains by status
+
+---
+
+### Part 2: Security Scanner
+
+**File:** `security_scanner.py`
+
+**Usage Options:**
+
+```bash
+# Option 1: Scan subdomains from TXT file
+python security_scanner.py --file example.com_active.txt
+
+# Option 2: Interactive mode (prompts for file selection)
+python security_scanner.py
+
+# Option 3: Custom output filename
+python security_scanner.py --file domains.txt --output security_report.xlsx
+
+# Option 4: Works with any domain list
+python security_scanner.py --file company_subdomains.xlsx
+```
+
+**Supported Input Formats:**
+- `.txt` files (one subdomain per line) - e.g., portal.example.com
+- `.xlsx` files (must have 'Subdomain' column)
+
+**What it does:**
+1. Loads subdomains from input file
+2. For each subdomain:
+   - Tests 20 security controls (see checklist below)
+   - Uses sslyze for TLS/certificate analysis
+   - Uses dnspython for DNS checks
+   - Checks HTTP headers and configuration
+3. Computes weighted scores per category
+4. Ranks subdomains by total score
+5. Exports comprehensive Excel report
+
+**Performance:**
+- **Rate limit:** 3 seconds per subdomain (ethical)
+- **100 subdomains:** ~5 minutes
+- **1000 subdomains:** ~50 minutes
+
+**Console Output Example:**
+```
+[1/32] portal.example.com
+  Score: 87.50/100 | H:4/4 M:7/8 L:6/8
+
+[2/32] www.example.com
+  Score: 72.30/100 | H:3/4 M:6/8 L:5/8
+```
+
+---
+
+## 🔐 Security Checklist
+
+### 20-Item Security Assessment
+
+The scanner evaluates each subdomain against 20 controls aligned with OWASP, NIST SP 800-52, and industry best practices.
+
+### High Priority (4 controls) - Critical Security
+| ID | Control | Description |
+|----|---------|-------------|
+| **TLS-1** | TLS 1.2+ Enforced | No TLS 1.0/1.1 allowed |
+| **CERT-1** | Valid Certificate | Trusted CA, not expired, valid chain |
+| **HTTPS-1** | HTTPS Enforced | HTTP redirects to HTTPS (301/302) |
+| **HSTS-1** | HSTS Configured | max-age ≥31536000 + includeSubDomains |
+
+### Medium Priority (8 controls) - Important Protections
+| ID | Control | Description |
+|----|---------|-------------|
+| **CSP-1** | Content Security Policy | CSP header present |
+| **XFO-1** | X-Frame-Options | DENY or SAMEORIGIN |
+| **XCTO-1** | X-Content-Type-Options | nosniff |
+| **XXP-1** | X-XSS-Protection | 1; mode=block |
+| **RP-1** | Referrer-Policy | strict-origin-when-cross-origin or stricter |
+| **PP-1** | Permissions-Policy | Present and configured |
+| **FS-1** | Forward Secrecy | ECDHE/DHE cipher suites |
+| **WC-1** | No Weak Ciphers | No RC4/3DES/NULL/EXPORT |
+
+### Low Priority (8 controls) - Best Practices
+| ID | Control | Description |
+|----|---------|-------------|
+| **SR-1** | Subresource Integrity | SRI on external scripts |
+| **COO-1** | Secure Cookies | Secure + HttpOnly flags |
+| **SI-1** | Server Info | No version disclosure |
+| **DNS-1** | DNSSEC | DS records present |
+| **SPF-1** | SPF Record | Email validation configured |
+| **HPKP-1** | HPKP Absent | Deprecated, should be absent |
+| **ETag-1** | ETag Security | Not timestamp-based |
+| **Cache-1** | Cache Control | no-store on sensitive pages |
+
+---
+
+## 📊 Scoring Methodology
+
+### Weighted Category Scoring
+
+Each control receives binary scoring: **Pass (100 points)** or **Fail (0 points)**
+
+Category scores are computed as: `(passes / total_controls) × weight`
+
+| Category | Weight | Controls | Max Points |
+|----------|--------|----------|------------|
+| **Encryption/TLS** | 25% | TLS-1, CERT-1, HTTPS-1, HSTS-1, FS-1, WC-1 (6) | 25 |
+| **Secure Headers** | 30% | CSP-1, XFO-1, XCTO-1, XXP-1, RP-1, PP-1 (6) | 30 |
+| **Config Protections** | 20% | SR-1, COO-1, HPKP-1, ETag-1, Cache-1 (5) | 20 |
+| **Info Disclosure** | 10% | SI-1 (1) | 10 |
+| **DNS/Email** | 15% | DNS-1, SPF-1 (2) | 15 |
+| **TOTAL** | **100%** | **20 controls** | **100** |
+
+### Example Calculation
+
+**Subdomain:** `portal.university.ac.lk`
+
+```
+Encryption/TLS:    5/6 pass → (5/6) × 25 = 20.83 points
+Secure Headers:    4/6 pass → (4/6) × 30 = 20.00 points
+Config Protections: 3/5 pass → (3/5) × 20 = 12.00 points
+Info Disclosure:   1/1 pass → (1/1) × 10 = 10.00 points
+DNS/Email:         1/2 pass → (1/2) × 15 =  7.50 points
+────────────────────────────────────────────────────
+Total Score: 70.33 / 100
+```
+
+### Score Interpretation
+
+| Score Range | Security Level | Interpretation |
+|-------------|----------------|----------------|
+| **80-100** | 🟢 **Strong** | Excellent security posture, most controls implemented |
+| **50-79** | 🟡 **Moderate** | Core protections present, improvements needed |
+| **0-49** | 🔴 **Weak** | Critical vulnerabilities, immediate action required |
+
+---
+
+## 📁 Output Files
+
+### Primary Output: `website_ranking.xlsx`
+
+Excel file with **3 sheets**:
+
+#### Sheet 1: Security Ranking
+Ranked table of all scanned subdomains with:
+- **Subdomain** - Domain name
+- **Rank** - Position (1 = highest score)
+- **Total_Score** - Security Compliance Score (0-100)
+- **Scan_Success** - Whether HTTPS connection succeeded
+- **High/Medium/Low_Priority_Passes** - Control pass counts (e.g., "3/4")
+- **Individual Controls** - 20 columns (TLS-1_Pass, CERT-1_Pass, etc.) showing "Yes"/"No"
+- **Category Scores** - 5 columns showing points per category
+
+#### Sheet 2: Checklist
+Reference table of all 20 controls with:
+- Control ID
+- Priority level
+- Description
+
+#### Sheet 3: Categories
+Scoring methodology with:
+- Category name
+- Weight percentage
+- Controls included
+- Check count
+
+### Other Files
+
+| File | Description | Generated By |
+|------|-------------|--------------|
+| `<domain>_all.txt` | All discovered subdomains | subdomain_handler.py |
+| `<domain>_active.txt` | HTTP/HTTPS active subdomains | subdomain_handler.py |
+| `<domain>_created_not_active.txt` | Inactive subdomains | subdomain_handler.py |
+
+---
+
+## 🔬 Research Use Cases & Data Analysis
+
+### 1. Comparative Domain Security Analysis
+```python
+import pandas as pd
+
+df = pd.read_excel('website_ranking.xlsx', sheet_name='Security Ranking')
+
+# Compare organizations or domains
+for subdomain in df['Subdomain']:
+    domain = subdomain.split('.')[-2] + '.' + subdomain.split('.')[-1]  # Extract root domain
+    print(f"Domain: {domain} | Subdomain: {subdomain} | Score: {df[df['Subdomain']==subdomain]['Total_Score'].values[0]}")
+```
+
+### 2. Statistical Analysis
+```python
+# Descriptive statistics
+print(df['Total_Score'].describe())
+print(f"Median: {df['Total_Score'].median()}")
+
+# Control adoption rates
+controls = [col for col in df.columns if col.endswith('_Pass')]
+for ctrl in controls:
+    pass_rate = (df[ctrl] == 'Yes').sum() / len(df) * 100
+    print(f"{ctrl}: {pass_rate:.1f}%")
+```
+
+### 3. Category Analysis
+```python
+# Category performance
+category_cols = ['Encryption/TLS_Score', 'Secure Headers_Score', 
+                 'Configuration Protections_Score', 
+                 'Information Disclosure_Score', 'DNS/Email_Score']
+df[category_cols].mean()
+```
+
+### 4. Vulnerability Patterns
+```python
+# Identify common failures
+for ctrl in controls:
+    failure_rate = (df[ctrl] == 'No').sum() / len(df) * 100
+    if failure_rate > 50:
+        print(f"Common vulnerability: {ctrl} ({failure_rate:.1f}% fail)")
+```
+
+### 5. .ac.lk Correlation Studies
+```python
+# Example: Score vs. Sri Lankan University Characteristics
+import pandas as pd
+
+# Merge with Sri Lankan university data (UGC data, student enrollment, etc.)
+merged = pd.merge(df, srilanka_uni_data, left_on='Subdomain', right_on='domain')
+merged[['Total_Score', 'student_count', 'it_budget', 'establishment_year']].corr()
+
+# Analyze by university type
+print("State Universities:", merged[merged['type']=='state']['Total_Score'].mean())
+print("Private Universities:", merged[merged['type']=='private']['Total_Score'].mean())
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Error: "File not found"**
+```bash
+# Solution: Verify file exists
+ls -la *.txt *.xlsx
+
+# Or use absolute path
+python security_scanner.py --file /full/path/to/file.txt
+```
+
+**Error: "ModuleNotFoundError: No module named 'sslyze'"**
+```bash
+# Solution: Install dependencies
+pip install -r requirements.txt
+
+# Or install individually
+pip install sslyze dnspython beautifulsoup4 tqdm
+```
+
+**Error: "Connection timeout"**
+```
+# Normal behavior for unreachable hosts
+# These will score 0 and marked as Scan_Success=False
+# The scanner continues with remaining subdomains
+```
+
+**Error: "SSL certificate verification failed"**
+```
+# Expected for invalid/self-signed certificates
+# CERT-1 control will fail (as intended)
+# Scanner handles this gracefully
+```
+
+**Slow scanning**
+```bash
+# Rate limiting is intentional (3s per subdomain)
+# To scan faster (NOT RECOMMENDED without permission):
+# Edit security_scanner.py and reduce time.sleep(3)
+
+# WARNING: Aggressive scanning may:
+# - Trigger security alerts
+# - Be considered DoS attack
+# - Violate computer misuse laws
+```
+
+**Memory issues (1000+ subdomains)**
+```bash
+# Solution: Process in batches
+# Split your input file into smaller files:
+split -l 500 large_domain_list.txt batch_
+
+# Scan each batch:
+for file in batch_*; do
+    python security_scanner.py --file $file --output results_$file.xlsx
+done
+```
+
+### Debug Mode
+
+To see detailed error messages, edit `security_scanner.py`:
+```python
+# Comment out this line:
+# warnings.filterwarnings('ignore')
+```
+
+---
+
+## ⚠️ Ethical Considerations
+
+### **IMPORTANT: Only Scan Authorized Domains**
+
+**Legal Requirements:**
+- ✅ Only scan domains you **own**
+- ✅ Only scan domains you have **written permission** to test
+- ❌ **Never** scan third-party domains without authorization
+
+**Why This Matters:**
+Unauthorized scanning may violate:
+- **Computer Fraud and Abuse Act (CFAA)** - United States
+- **Computer Misuse Act** - United Kingdom
+- **Local cybersecurity and computer crimes acts** in your jurisdiction
+- Privacy and data protection laws
+
+**Penalties may include:**
+- Criminal prosecution
+- Civil lawsuits
+- University disciplinary action
+- Professional consequences
+
+### Best Practices
+
+1. **Authorization**
+   - Obtain written permission before scanning
+   - Document authorization (emails, letters)
+   - Respect scope limitations
+
+2. **Rate Limiting**
+   - Keep 3-second delay (default)
+   - Don't run multiple instances simultaneously
+   - Avoid peak traffic hours
+
+3. **Responsible Disclosure**
+   - Report critical vulnerabilities privately
+   - Give institutions time to remediate (90 days typical)
+   - Follow coordinated disclosure practices
+
+4. **Data Handling**
+   - Secure storage of results
+   - Comply with data protection laws
+   - Anonymize data for public research
+
+5. **Research Ethics**
+   - Obtain IRB approval if required
+   - Respect institutional review processes
+   - Follow academic integrity guidelines
+
+### For Academic/Research Use
+
+If conducting security research:
+1. Seek approval from relevant authorities or governing bodies
+2. Contact local CERT organizations for guidance
+3. Notify target organizations of research intent
+4. Share results with scanned institutions
+5. Follow established responsible disclosure guidelines
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! To contribute:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/improvement`)
+3. Make your changes
+4. Test thoroughly
+5. Commit (`git commit -am 'Add new feature'`)
+6. Push (`git push origin feature/improvement`)
+7. Create Pull Request
+
+### Suggested Improvements
+
+- [ ] Add JSON output format
+- [ ] Implement retry logic with exponential backoff
+- [ ] Add support for custom checklist items
+- [ ] Create web dashboard for results visualization
+- [ ] Add Docker support
+- [ ] Implement concurrent scanning (with rate limiting)
+- [ ] Add historical tracking database
+- [ ] Generate PDF reports
+- [ ] Add ML-based risk scoring
+
+---
+
+## 📚 References & Citations
+
+### Methodology Based On:
+- [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/)
+- [NIST SP 800-52 Rev. 2: TLS Guidelines](https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-52r2.pdf)
+- [OWASP Top 10 (2021)](https://owasp.org/www-project-top-ten/)
+- [OWASP Application Security Verification Standard (ASVS)](https://owasp.org/www-project-application-security-verification-standard/)
+
+### Tools Used:
+- [SSLyze](https://github.com/nabla-c0d3/sslyze) - TLS/SSL scanner
+- [dnspython](https://www.dnspython.org/) - DNS toolkit
+- [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) - HTML parser
+- [crt.sh](https://crt.sh/) - Certificate Transparency search
+
+### Citing This Tool in Research
+
+If you use this tool in academic research, please cite:
+
+```bibtex
+@software{subdomain_security_scanner_2025,
+  title = {Universal Subdomain Security Scanner: Comprehensive Security Assessment Toolkit},
+  author = {LalithK90},
+  year = {2025},
+  url = {https://github.com/LalithK90/ac-lk-network-audit},
+  note = {Automated 20-item security checklist with weighted scoring for any domain}
+}
+```
+
+---
+
+## 📄 License
+
+**Use for authorized security testing and academic research only.**
+
+This tool is provided for:
+- Educational purposes
+- Authorized security assessments
+- Academic research with proper approvals
+
+**You accept full responsibility** for how you use this tool. The authors assume no liability for misuse.
+
+---
+
+## 👤 Author
+
+**LalithK90**
+- GitHub: [@LalithK90](https://github.com/LalithK90)
+- Repository: [ac-lk-network-audit](https://github.com/LalithK90/ac-lk-network-audit)
+
+---
+
+## 📧 Support
+
+For questions or issues:
+1. Check this README thoroughly
+2. Review code comments in scripts
+3. Check [Issues](https://github.com/LalithK90/ac-lk-network-audit/issues) page
+4. Create new issue with detailed description
+
+---
+
+**Version:** 2.0  
+**Last Updated:** October 21, 2025  
+**Status:** Production-ready for authorized use
+
+---
+
+### Quick Commands Reference
+
+```bash
+# Installation
+pip install -r requirements.txt
+
+# Enumerate subdomains (edit domain in script first)
+python subdomain_handler.py
+
+# Run security scanner
+python security_scanner.py --file example.com_active.txt
+
+# Interactive mode (select from available files)
+python security_scanner.py
+
+# Custom output filename
+python security_scanner.py --file domains.txt --output security_report.xlsx
+
+# Works with any domain or TLD
+python security_scanner.py --file company_subdomains.txt
+```
+
+---
+
+**� Universal:** This toolkit works with any domain or TLD (.com, .org, .edu, .gov, .ac.lk, etc.)  
+**🔒 Ethics:** Only scan domains you own or have explicit permission to test  
+**📊 Output:** Comprehensive Excel reports with security scores and detailed checklist results
+
+---
+
+**Remember: With great scanning power comes great responsibility. Scan ethically!**
