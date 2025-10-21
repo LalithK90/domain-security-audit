@@ -1446,6 +1446,35 @@ Output:
         f"Estimated time: ~{len(subdomains) * 2 * 3 / 60:.1f} minutes (with 3s rate limit)")
     print()
     
+    # Generate output filename based on domain or use custom output
+    if args.output:
+        output_file = args.output
+    else:
+        # Extract root domain from first subdomain to use as filename
+        # e.g., "portal.icosiam.com" -> "icosiam.com"
+        first_subdomain = subdomains[0]
+        parts = first_subdomain.split('.')
+        if len(parts) >= 2:
+            root_domain = '.'.join(parts[-2:])  # Get last 2 parts (domain.tld)
+        else:
+            root_domain = first_subdomain
+        # Sanitize filename (remove invalid characters)
+        safe_domain = root_domain.replace(
+            '/', '_').replace('\\', '_').replace(':', '_')
+        output_file = f'{safe_domain}_security_report.xlsx'
+
+    print(f"Output file: {output_file}\n")
+
+    # Initialize Excel file with headers (incremental writing)
+    excel_writer = pd.ExcelWriter(output_file, engine='openpyxl')
+
+    # Create empty DataFrames with headers
+    initial_columns = ['Subdomain', 'Type', 'Scan_Success', 'Total_Score']
+    df_results_buffer = pd.DataFrame(columns=initial_columns)
+    df_results_buffer.to_excel(
+        excel_writer, sheet_name='Security Results', index=False)
+    excel_writer.close()
+
     results_list = []
     scanned_count = 0
     # Each subdomain has 2 variants (www and non-www)
@@ -1531,15 +1560,55 @@ Output:
                 result_row[f"{check_id}_Pass"] = 'Yes' if all_checks[check_id] else 'No'
             results_list.append(result_row)
 
+            # Incremental write: Append this result to Excel immediately
+            # This reduces memory usage and provides partial results if interrupted
+            try:
+                # Read existing data
+                existing_df = pd.read_excel(
+                    output_file, sheet_name='Security Results')
+                # Append new row
+                new_df = pd.DataFrame([result_row])
+                updated_df = pd.concat(
+                    [existing_df, new_df], ignore_index=True)
+
+                # Write back with all sheets
+                with pd.ExcelWriter(output_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                    updated_df.to_excel(
+                        writer, sheet_name='Security Results', index=False)
+
+                    # Update summary every 5 scans
+                    if scanned_count % 5 == 0:
+                        summary_rows = []
+                        for sub_type in updated_df['Type'].unique():
+                            group = updated_df[updated_df['Type'] == sub_type]
+                            summary_rows.append({
+                                'Type': sub_type,
+                                'Count': len(group),
+                                'Avg_Score': round(group['Total_Score'].mean(), 2),
+                                'Median_Score': round(group['Total_Score'].median(), 2),
+                                'Max_Score': round(group['Total_Score'].max(), 2),
+                                'Min_Score': round(group['Total_Score'].min(), 2)
+                            })
+                        df_summary = pd.DataFrame(summary_rows)
+                        df_summary.to_excel(
+                            writer, sheet_name='Summary By Type', index=False)
+                        print(
+                            f"  ✅ Excel updated ({scanned_count}/{total_to_scan} scans)")
+            except Exception as e:
+                print(
+                    f"  ⚠️  Warning: Could not update Excel incrementally: {e}")
+
             # Rate limiting: 3 seconds between scans (ethical scanning)
             time.sleep(3)
     
     print("\n" + "=" * 80)
-    print("Processing results...")
+    print("Finalizing Excel report...")
     print("=" * 80)
 
-    df_results = pd.DataFrame(results_list)
+    # Read the incrementally built data from Excel
+    df_results = pd.read_excel(output_file, sheet_name='Security Results')
 
+    # Recalculate final summary
     summary_rows = []
     for sub_type in df_results['Type'].unique():
         group = df_results[df_results['Type'] == sub_type]
@@ -1553,15 +1622,10 @@ Output:
         })
     df_summary = pd.DataFrame(summary_rows)
 
-    all_cols = ['Subdomain', 'Type', 'Scan_Success', 'Total_Score']
-    check_cols = sorted(
-        {col for row in results_list for col in row if col.endswith('_Pass')})
-    all_cols += check_cols
-    df_results = df_results[all_cols]
-
-    output_path = Path(args.output)
+    output_path = Path(output_file)
     try:
-        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        # Final write with all 5 sheets complete
+        with pd.ExcelWriter(output_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
             # Sheet 1: Security Results
             df_results.to_excel(
                 writer, sheet_name='Security Results', index=False)
