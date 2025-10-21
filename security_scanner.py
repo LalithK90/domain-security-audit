@@ -54,6 +54,7 @@ import json
 import concurrent.futures
 from typing import List, Set, Dict
 import string
+from openpyxl import load_workbook
 from sslyze import (
     Scanner,
     ServerScanRequest,
@@ -1466,13 +1467,23 @@ Output:
     print(f"Output file: {output_file}\n")
 
     # Initialize Excel file with headers (incremental writing)
+    # We'll create separate sheets for Active and Inactive subdomains so
+    # incremental updates can append to the correct sheet.
     excel_writer = pd.ExcelWriter(output_file, engine='openpyxl')
 
-    # Create empty DataFrames with headers
+    # Create empty DataFrames with headers for both sheets
     initial_columns = ['Subdomain', 'Type', 'Scan_Success', 'Total_Score']
-    df_results_buffer = pd.DataFrame(columns=initial_columns)
-    df_results_buffer.to_excel(
-        excel_writer, sheet_name='Security Results', index=False)
+    df_active_buffer = pd.DataFrame(columns=initial_columns)
+    df_inactive_buffer = pd.DataFrame(columns=initial_columns)
+
+    df_active_buffer.to_excel(
+        excel_writer, sheet_name='Active Subdomains', index=False)
+    df_inactive_buffer.to_excel(
+        excel_writer, sheet_name='Inactive Subdomains', index=False)
+    # Also create placeholder for Summary By Type so incremental writes can
+    # replace it later without errors.
+    pd.DataFrame(columns=['Type', 'Count', 'Avg_Score', 'Median_Score', 'Max_Score', 'Min_Score']).to_excel(
+        excel_writer, sheet_name='Summary By Type', index=False)
     excel_writer.close()
 
     results_list = []
@@ -1560,29 +1571,55 @@ Output:
                 result_row[f"{check_id}_Pass"] = 'Yes' if all_checks[check_id] else 'No'
             results_list.append(result_row)
 
-            # Incremental write: Append this result to Excel immediately
-            # This reduces memory usage and provides partial results if interrupted
+            # OPTIMIZED: Efficient row-level append using openpyxl directly
+            # This avoids reading/rewriting entire sheets (O(1) vs O(n))
             try:
-                # Read existing data
-                existing_df = pd.read_excel(
-                    output_file, sheet_name='Security Results')
-                # Append new row
-                new_df = pd.DataFrame([result_row])
-                updated_df = pd.concat(
-                    [existing_df, new_df], ignore_index=True)
+                # Determine target sheet based on Scan_Success
+                target_sheet_name = 'Active Subdomains' if result_row[
+                    'Scan_Success'] else 'Inactive Subdomains'
 
-                # Write back with all sheets
-                with pd.ExcelWriter(output_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-                    updated_df.to_excel(
-                        writer, sheet_name='Security Results', index=False)
+                # Open workbook and get target sheet
+                wb = load_workbook(output_file)
+                ws = wb[target_sheet_name]
 
-                    # Update summary every 5 scans
-                    if scanned_count % 5 == 0:
+                # Build row data in same order as header columns
+                # Get header from first row
+                header = [cell.value for cell in ws[1]]
+
+                # Build row values matching header order
+                row_values = []
+                for col_name in header:
+                    row_values.append(result_row.get(col_name, ''))
+
+                # Append row directly (O(1) operation - no full read required!)
+                ws.append(row_values)
+
+                # Save workbook
+                wb.save(output_file)
+                wb.close()
+
+                # Update summary every 5 scans (still uses pandas for aggregation)
+                if scanned_count % 5 == 0:
+                    try:
+                        # Read both sheets for summary calculation
+                        try:
+                            active_df = pd.read_excel(
+                                output_file, sheet_name='Active Subdomains')
+                        except Exception:
+                            active_df = pd.DataFrame(columns=initial_columns)
+                        try:
+                            inactive_df = pd.read_excel(
+                                output_file, sheet_name='Inactive Subdomains')
+                        except Exception:
+                            inactive_df = pd.DataFrame(columns=initial_columns)
+
+                        combined_df = pd.concat(
+                            [active_df, inactive_df], ignore_index=True)
                         summary_rows = []
-                        for sub_type in updated_df['Type'].unique():
-                            group = updated_df[updated_df['Type'] == sub_type]
+                        for stype in combined_df['Type'].unique():
+                            group = combined_df[combined_df['Type'] == stype]
                             summary_rows.append({
-                                'Type': sub_type,
+                                'Type': stype,
                                 'Count': len(group),
                                 'Avg_Score': round(group['Total_Score'].mean(), 2),
                                 'Median_Score': round(group['Total_Score'].median(), 2),
@@ -1590,10 +1627,18 @@ Output:
                                 'Min_Score': round(group['Total_Score'].min(), 2)
                             })
                         df_summary = pd.DataFrame(summary_rows)
-                        df_summary.to_excel(
-                            writer, sheet_name='Summary By Type', index=False)
+
+                        # Write summary using pandas
+                        with pd.ExcelWriter(output_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                            df_summary.to_excel(
+                                writer, sheet_name='Summary By Type', index=False)
+
                         print(
                             f"  ✅ Excel updated ({scanned_count}/{total_to_scan} scans)")
+                    except Exception as summary_err:
+                        print(
+                            f"  ⚠️  Warning: Could not update summary: {summary_err}")
+
             except Exception as e:
                 print(
                     f"  ⚠️  Warning: Could not update Excel incrementally: {e}")
@@ -1605,8 +1650,18 @@ Output:
     print("Finalizing Excel report...")
     print("=" * 80)
 
-    # Read the incrementally built data from Excel
-    df_results = pd.read_excel(output_file, sheet_name='Security Results')
+    # Read the incrementally built data from Excel (combine Active + Inactive)
+    try:
+        active_df = pd.read_excel(output_file, sheet_name='Active Subdomains')
+    except Exception:
+        active_df = pd.DataFrame(columns=initial_columns)
+    try:
+        inactive_df = pd.read_excel(
+            output_file, sheet_name='Inactive Subdomains')
+    except Exception:
+        inactive_df = pd.DataFrame(columns=initial_columns)
+
+    df_results = pd.concat([active_df, inactive_df], ignore_index=True)
 
     # Recalculate final summary
     summary_rows = []
@@ -1626,9 +1681,15 @@ Output:
     try:
         # Final write with all 5 sheets complete
         with pd.ExcelWriter(output_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-            # Sheet 1: Security Results
+            # Sheet 1: Security Results (combined view)
             df_results.to_excel(
                 writer, sheet_name='Security Results', index=False)
+
+            # Also write Active and Inactive sheets separately
+            active_df.to_excel(
+                writer, sheet_name='Active Subdomains', index=False)
+            inactive_df.to_excel(
+                writer, sheet_name='Inactive Subdomains', index=False)
 
             # Sheet 2: Summary By Type
             df_summary.to_excel(
