@@ -1,44 +1,3 @@
-"""
-Comprehensive Subdomain Security Scanner
-
-ULTRA-SIMPLE USAGE - Just provide domain name (no flags needed!):
-    python security_scanner.py example.com
-    python security_scanner.py university.edu
-    python security_scanner.py company.ac.lk
-
-That's it! The script automatically:
-    1. Discovers ALL subdomains (from Certificate Transparency + DNS probing)
-    2. Tests BOTH www and non-www variants (e.g., portal.example.com AND www.portal.example.com)
-    3. Classifies each subdomain (webapp, api, static, or other)
-    4. Runs context-aware 106-parameter security assessment
-    5. Generates Excel report: website_ranking.xlsx
-
-Alternative Usage (if you already have subdomain list):
-    python security_scanner.py --file subdomains.txt        # Use TXT file
-    python security_scanner.py --file domain_list.xlsx      # Use Excel file
-    python security_scanner.py subdomains.txt               # File detection (auto)
-    python security_scanner.py                              # Interactive mode
-
-Custom Output:
-    python security_scanner.py example.com --output my_report.xlsx
-
-Output File (website_ranking.xlsx):
-    3 sheets generated automatically:
-        - Security Results: Detailed scores for each subdomain variant
-        - Summary By Type: Statistics grouped by subdomain type (webapp/api/static/other)
-        - Checklist: Complete list of all 106 security controls tested
-
-Key Features:
-    ✓ NO file upload needed - just domain name!
-    ✓ Automatic subdomain discovery (crt.sh + DNS probing)
-    ✓ www/non-www variant testing (tests both if they resolve)
-    ✓ Context-aware scoring (webapps:106 checks, api:75+, static:70+, other:9)
-    ✓ Rate-limited scanning (3s per subdomain - ethical and safe)
-    ✓ Comprehensive assessment (TLS, headers, DNS, auth, compliance, etc.)
-
-See README.md for complete documentation.
-"""
-
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -863,12 +822,184 @@ CHECKS = {
     'COMP-6': {'priority': 'Low', 'desc': 'Cookie consent banner is present and functional'},
 }
 
+# Comprehensive scoring system - All 106 parameters included
+# Weights are balanced across 20 categories (total = 100 points)
 CATEGORIES = {
-    'Encryption/TLS': {'weight': 25, 'checks': ['TLS-1', 'CERT-1', 'HTTPS-1', 'HSTS-1', 'FS-1', 'WC-1']},
-    'Secure Headers': {'weight': 30, 'checks': ['CSP-1', 'XFO-1', 'XCTO-1', 'XXP-1', 'RP-1', 'PP-1']},
-    'Configuration Protections': {'weight': 20, 'checks': ['SR-1', 'COO-1', 'HPKP-1', 'ETag-1', 'Cache-1']},
-    'Information Disclosure': {'weight': 10, 'checks': ['SI-1']},
-    'DNS/Email': {'weight': 15, 'checks': ['DNS-1', 'SPF-1']},
+    'TLS & Certificates': {
+        'weight': 12,
+        'checks': ['TLS-1', 'CERT-1', 'TLS-2', 'CERT-2', 'FS-1', 'WC-1', 'HSTS-2']
+    },
+    'HTTP Security Headers': {
+        'weight': 15,
+        'checks': ['HTTPS-1', 'HSTS-1', 'CSP-1', 'XFO-1', 'XCTO-1', 'XXP-1', 'RP-1', 'PP-1',
+                   'HEADER-1', 'HEADER-2', 'HEADER-3', 'HEADER-5', 'HEADER-6', 'HEADER-7', 'CORS-1']
+    },
+    'Authentication & Sessions': {
+        'weight': 10,
+        'checks': ['AUTH-1', 'AUTH-2', 'AUTH-3', 'AUTH-4', 'AUTH-5', 'AUTH-6', 'AUTH-7',
+                   'SESSION-1', 'COO-1', 'SAMESITE-1']
+    },
+    'Input Validation': {
+        'weight': 9,
+        'checks': ['INPUT-1', 'INPUT-2', 'INPUT-3', 'INPUT-4', 'INPUT-5', 'INPUT-6',
+                   'INPUT-7', 'INPUT-8', 'INPUT-9']
+    },
+    'Access Control': {
+        'weight': 6,
+        'checks': ['AUTHZ-1', 'AUTHZ-2', 'AUTHZ-3', 'AUTHZ-4', 'AUTHZ-5', 'AUTHZ-6']
+    },
+    'Encryption & Data Protection': {
+        'weight': 3,
+        'checks': ['ENCRYPT-1', 'ENCRYPT-2']
+    },
+    'Logging & Monitoring': {
+        'weight': 4,
+        'checks': ['LOG-1', 'LOG-2', 'LOG-3', 'LOG-4']
+    },
+    'Cloud & Infrastructure': {
+        'weight': 4,
+        'checks': ['CLOUD-1', 'CLOUD-2', 'CLOUD-3', 'SERVER-1']
+    },
+    'DNS & Email Security': {
+        'weight': 7,
+        'checks': ['DNS-1', 'SPF-1', 'DMARC-1', 'DNS-2', 'MX-1', 'DNS-3', 'DNS-4']
+    },
+    'File & Directory Security': {
+        'weight': 7,
+        'checks': ['DIR-1', 'ADMIN-1', 'ROBOTS-1', 'SEC-1', 'BACKUP-1', 'GIT-1', 'CONFIG-1']
+    },
+    'Information Disclosure': {
+        'weight': 6,
+        'checks': ['SI-1', 'TITLE-1', 'ETag-1', 'ERROR-1', 'HEADER-4', 'ERROR-2']
+    },
+    'Performance & Caching': {
+        'weight': 2,
+        'checks': ['Cache-1', 'CACHE-2']
+    },
+    'Redirect Security': {
+        'weight': 2,
+        'checks': ['REDIR-1', 'REDIR-2']
+    },
+    'Content Security': {
+        'weight': 5,
+        'checks': ['SR-1', 'SRI-2', 'MIME-1', 'MIXED-1', 'THIRD-1']
+    },
+    'API Security': {
+        'weight': 3,
+        'checks': ['API-1', 'API-2', 'HTTP2-1']
+    },
+    'Advanced Controls': {
+        'weight': 2,
+        'checks': ['WAF-1', 'REPORT-1']
+    },
+    'Compliance & Standards': {
+        'weight': 5,
+        'checks': ['COMP-1', 'COMP-2', 'COMP-3', 'COMP-4', 'COMP-5', 'COMP-6']
+    },
+    'Subdomain Security': {
+        'weight': 2,
+        'checks': ['SUB-1', 'SUB-2']
+    },
+    'WAF & DDoS Protection': {
+        'weight': 2,
+        'checks': ['WAF-2', 'DDoS-1']
+    },
+    'Third-Party Security': {
+        'weight': 3,
+        'checks': ['THIRD-2', 'THIRD-3']
+    }
+}
+
+# Context-aware weights: Different priorities for different subdomain types
+CONTEXT_WEIGHTS = {
+    'webapp': {
+        'TLS & Certificates': 10,
+        'HTTP Security Headers': 12,
+        'Authentication & Sessions': 15,  # Critical for webapps
+        'Input Validation': 12,           # Critical for webapps
+        'Access Control': 8,              # Higher for webapps
+        'Encryption & Data Protection': 4,
+        'Logging & Monitoring': 5,
+        'Cloud & Infrastructure': 3,
+        'DNS & Email Security': 5,
+        'File & Directory Security': 6,
+        'Information Disclosure': 5,
+        'Performance & Caching': 1,
+        'Redirect Security': 3,
+        'Content Security': 4,
+        'API Security': 2,
+        'Advanced Controls': 2,
+        'Compliance & Standards': 4,
+        'Subdomain Security': 1,
+        'WAF & DDoS Protection': 2,
+        'Third-Party Security': 2
+    },
+    'api': {
+        'TLS & Certificates': 15,         # Critical for APIs
+        'HTTP Security Headers': 10,
+        'Authentication & Sessions': 15,  # Critical for APIs
+        'Input Validation': 12,           # Critical for APIs
+        'Access Control': 10,             # Critical for APIs
+        'Encryption & Data Protection': 5,
+        'Logging & Monitoring': 8,        # Higher for APIs
+        'Cloud & Infrastructure': 5,
+        'DNS & Email Security': 3,
+        'File & Directory Security': 4,
+        'Information Disclosure': 3,
+        'Performance & Caching': 1,
+        'Redirect Security': 1,
+        'Content Security': 2,
+        'API Security': 8,                # Much higher for APIs
+        'Advanced Controls': 3,
+        'Compliance & Standards': 3,
+        'Subdomain Security': 1,
+        'WAF & DDoS Protection': 3,
+        'Third-Party Security': 3
+    },
+    'static': {
+        'TLS & Certificates': 15,         # Foundation
+        'HTTP Security Headers': 18,      # Very important for static
+        'Authentication & Sessions': 2,   # Less critical
+        'Input Validation': 2,            # Less critical
+        'Access Control': 2,              # Less critical
+        'Encryption & Data Protection': 3,
+        'Logging & Monitoring': 3,
+        'Cloud & Infrastructure': 5,
+        'DNS & Email Security': 8,
+        'File & Directory Security': 8,
+        'Information Disclosure': 7,
+        'Performance & Caching': 5,       # More important
+        'Redirect Security': 2,
+        'Content Security': 10,           # Very important for static
+        'API Security': 1,
+        'Advanced Controls': 2,
+        'Compliance & Standards': 4,
+        'Subdomain Security': 1,
+        'WAF & DDoS Protection': 2,
+        'Third-Party Security': 4
+    },
+    'other': {
+        'TLS & Certificates': 20,
+        'HTTP Security Headers': 15,
+        'Authentication & Sessions': 5,
+        'Input Validation': 5,
+        'Access Control': 5,
+        'Encryption & Data Protection': 5,
+        'Logging & Monitoring': 5,
+        'Cloud & Infrastructure': 5,
+        'DNS & Email Security': 15,       # Higher for other types
+        'File & Directory Security': 5,
+        'Information Disclosure': 5,
+        'Performance & Caching': 2,
+        'Redirect Security': 2,
+        'Content Security': 5,
+        'API Security': 1,
+        'Advanced Controls': 2,
+        'Compliance & Standards': 3,
+        'Subdomain Security': 5,          # Higher for other
+        'WAF & DDoS Protection': 3,
+        'Third-Party Security': 3
+    }
 }
 
 
@@ -1267,21 +1398,81 @@ def scan_tls_and_dns(subdomain):
     return tls_results, dns_results
 
 
-def compute_scores(all_checks):
-    """Compute category and total scores."""
+def compute_scores(all_checks, subdomain_type='other'):
+    """
+    Compute category and total scores with context-aware weights.
+    
+    Args:
+        all_checks: Dictionary of check results (check_id -> True/False)
+        subdomain_type: Type of subdomain ('webapp', 'api', 'static', 'other')
+    
+    Returns:
+        scores: Dictionary of category scores
+        total_score: Total weighted score out of 100
+        risk_rating: Risk rating based on type and score
+    """
     scores = {}
     total_score = 0
     
+    # Use context-aware weights if available, otherwise use default weights
+    weights = CONTEXT_WEIGHTS.get(subdomain_type, {})
+
     for cat, info in CATEGORIES.items():
         cat_checks = [all_checks.get(check, False) for check in info['checks']]
         if len(cat_checks) > 0:
-            cat_score = (sum(cat_checks) / len(cat_checks)) * info['weight']
+            # Use context-aware weight or fall back to default weight
+            weight = weights.get(cat, info['weight'])
+            cat_score = (sum(cat_checks) / len(cat_checks)) * weight
         else:
             cat_score = 0
         scores[cat] = round(cat_score, 2)
         total_score += cat_score
     
-    return scores, round(total_score, 2)
+    # Calculate risk rating based on subdomain type and score
+    risk_rating = calculate_risk_rating(total_score, subdomain_type)
+
+    return scores, round(total_score, 2), risk_rating
+
+
+def calculate_risk_rating(score, subdomain_type):
+    """
+    Calculate risk rating based on score and subdomain type.
+    
+    Different thresholds for different types:
+    - webapp/api: Higher security requirements (Critical/High risk)
+    - static: Medium security requirements
+    - other: Basic security requirements
+    """
+    if subdomain_type in ['webapp', 'api']:
+        # Stricter thresholds for interactive applications
+        if score >= 80:
+            return 'Low'
+        elif score >= 60:
+            return 'Medium'
+        elif score >= 40:
+            return 'High'
+        else:
+            return 'Critical'
+    elif subdomain_type == 'static':
+        # Moderate thresholds for static content
+        if score >= 70:
+            return 'Low'
+        elif score >= 50:
+            return 'Medium'
+        elif score >= 30:
+            return 'High'
+        else:
+            return 'Critical'
+    else:  # other
+        # Relaxed thresholds for non-interactive services
+        if score >= 60:
+            return 'Low'
+        elif score >= 40:
+            return 'Medium'
+        elif score >= 20:
+            return 'High'
+        else:
+            return 'Critical'
 
 
 def main():
@@ -1320,7 +1511,8 @@ Output:
         'domain', nargs='?', help='Domain to enumerate and scan (e.g., example.com)')
     parser.add_argument(
         '--file', '-f', help='Input file with subdomains (TXT or XLSX)')
-    parser.add_argument('--output', '-o', default='website_ranking.xlsx', help='Output Excel file')
+    parser.add_argument('--output', '-o', default=None,
+                        help='Output Excel file (default: {domain}_security_report.xlsx)')
     
     args = parser.parse_args()
     
@@ -1333,6 +1525,7 @@ Output:
     subdomains = None
     discovery_stats = None
     technologies_detected = None
+    domain_name = None  # Track domain name for filename generation
 
     if args.domain and args.file:
         print("❌ Error: Please specify either domain OR --file, not both")
@@ -1353,6 +1546,7 @@ Output:
                 return
         else:
             # Treat as domain name - AUTO-ENUMERATE MODE with 99% coverage
+            domain_name = domain_arg  # Store domain name for filename
             print(
                 f"Mode: Auto-enumeration (99% coverage) for domain '{domain_arg}'")
             results = enumerate_subdomains(domain_arg)
@@ -1402,6 +1596,7 @@ Output:
             except ValueError:
                 # Check if it looks like a domain name (no path separators, no extension)
                 if '/' not in choice and '.' in choice and not choice.endswith(('.txt', '.xlsx', '.xls')):
+                    domain_name = choice  # Store domain name
                     print(f"\nTreating '{choice}' as domain name...")
                     results = enumerate_subdomains(choice)
                     subdomains = results['active']
@@ -1422,6 +1617,7 @@ Output:
 
             # Check if it looks like a domain name
             if '/' not in user_input and '.' in user_input and not user_input.endswith(('.txt', '.xlsx', '.xls')):
+                domain_name = user_input  # Store domain name
                 print(f"\nTreating '{user_input}' as domain name...")
                 results = enumerate_subdomains(user_input)
                 subdomains = results['active']
@@ -1450,6 +1646,11 @@ Output:
     # Generate output filename based on domain or use custom output
     if args.output:
         output_file = args.output
+    elif domain_name:
+        # Use the actual domain name provided by user
+        safe_domain = domain_name.replace(
+            '/', '_').replace('\\', '_').replace(':', '_')
+        output_file = f'{safe_domain}_security_report.xlsx'
     else:
         # Extract root domain from first subdomain to use as filename
         # e.g., "portal.icosiam.com" -> "icosiam.com"
@@ -1472,7 +1673,8 @@ Output:
     excel_writer = pd.ExcelWriter(output_file, engine='openpyxl')
 
     # Create empty DataFrames with headers for both sheets
-    initial_columns = ['Subdomain', 'Type', 'Scan_Success', 'Total_Score']
+    initial_columns = ['Subdomain', 'Type',
+                       'Scan_Success', 'Total_Score', 'Risk_Rating']
     df_active_buffer = pd.DataFrame(columns=initial_columns)
     df_inactive_buffer = pd.DataFrame(columns=initial_columns)
 
@@ -1544,27 +1746,20 @@ Output:
                 if check not in all_checks:
                     all_checks[check] = False
 
-            # Step 4: Compute context-aware score
-            # Only count checks that are relevant to this subdomain type
-            # Score = (Passed Checks / Total Relevant Checks) × 100
-            score = 0
-            total_weight = 0
-            for check in relevant_checks:
-                weight = CHECKS[check]['weight'] if 'weight' in CHECKS[check] else 1
-                total_weight += weight if weight else 1
-                if all_checks[check]:
-                    score += weight if weight else 1
-            final_score = round((score / total_weight) * 100,
-                                2) if total_weight else 0
+            # Step 4: Compute context-aware score using the new comprehensive scoring
+            cat_scores, final_score, risk_rating = compute_scores(
+                all_checks, sub_type)
 
-            print(f"  Score: {final_score}/100 | Type: {sub_type}")
+            print(
+                f"  Score: {final_score}/100 | Risk: {risk_rating} | Type: {sub_type}")
 
             # Step 5: Build result row for Excel export
             result_row = {
                 'Subdomain': variant,  # e.g., 'portal.example.com' or 'www.portal.example.com'
                 'Type': sub_type,  # webapp, api, static, or other
                 'Scan_Success': success,  # True if HTTPS connection succeeded
-                'Total_Score': final_score,  # 0-100 based on relevant checks only
+                'Total_Score': final_score,  # 0-100 based on context-aware comprehensive scoring
+                'Risk_Rating': risk_rating,  # Critical/High/Medium/Low based on type and score
             }
             # Add individual check results (Yes/No for each relevant check)
             for check_id in relevant_checks:
@@ -1679,7 +1874,7 @@ Output:
 
     output_path = Path(output_file)
     try:
-        # Final write with all 5 sheets complete
+        # Final write with all sheets complete
         with pd.ExcelWriter(output_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
             # Sheet 1: Security Results (combined view)
             df_results.to_excel(
@@ -1695,7 +1890,28 @@ Output:
             df_summary.to_excel(
                 writer, sheet_name='Summary By Type', index=False)
 
-            # Sheet 3: Discovery Statistics (if available)
+            # NEW: Sheets 3-6: Separate ranking sheets by subdomain type
+            # Filter and sort each type by Total_Score (descending)
+            for sub_type in ['webapp', 'api', 'static', 'other']:
+                type_df = df_results[df_results['Type'] == sub_type].copy()
+                if not type_df.empty:
+                    # Sort by Total_Score descending (best security first)
+                    type_df = type_df.sort_values(
+                        'Total_Score', ascending=False)
+                    # Add rank column
+                    type_df.insert(0, 'Rank', range(1, len(type_df) + 1))
+
+                    # Create sheet name
+                    sheet_name = f'{sub_type.upper()} Ranking'
+                    if len(sheet_name) > 31:  # Excel sheet name limit
+                        sheet_name = sheet_name[:31]
+
+                    type_df.to_excel(
+                        writer, sheet_name=sheet_name, index=False)
+                    print(
+                        f"  📋 Created ranking sheet: {sheet_name} ({len(type_df)} entries)")
+
+            # Sheet 7: Discovery Statistics (if available)
             if discovery_stats:
                 stats_data = []
                 stats_data.append({'Metric': 'Total Subdomains Discovered',
@@ -1802,9 +2018,17 @@ Output:
         if discovery_stats:
             print(f"\n📊 Report includes:")
             print(f"  • Security Results (detailed scores per subdomain)")
+            print(f"  • Active/Inactive Subdomains (separate sheets)")
             print(f"  • Summary By Type (statistics by subdomain type)")
+            print(f"  • WEBAPP/API/STATIC/OTHER Rankings (sorted by security score)")
             print(f"  • Discovery Stats (subdomain discovery metrics)")
             print(f"  • Technologies (detected tech stack per subdomain)")
+            print(f"  • Checklist (all 106 security parameters)")
+            print(f"\n🎯 New Features:")
+            print(f"  ✅ All 106 parameters now included in scoring")
+            print(f"  ✅ Context-aware weights (different for webapp/api/static/other)")
+            print(f"  ✅ Risk rating column (Critical/High/Medium/Low)")
+            print(f"  ✅ Separate ranking sheets by subdomain type")
             print(f"  • Checklist (all 106 security controls)")
         else:
             print(f"\n📊 Report includes:")

@@ -22,15 +22,15 @@ pip install -r requirements.txt
 # 2. Run with just your domain name
 python security_scanner.py example.com
 
-# 3. Open the generated Excel report (5 sheets)
-# File: website_ranking.xlsx
+# 3. Open the generated Excel report (7 sheets)
+# File: example.com_security_report.xlsx
 ```
 
 **That's it!** The script automatically:
 - 🔍 Discovers 99% of subdomains using 18,991 smart patterns
 - 🔧 Detects technologies (servers, CMS, frameworks, languages)
 - 🔒 Performs 106-parameter security assessment
-- 📊 Generates 5-sheet Excel report with Discovery Stats and Technologies
+- 📊 Generates 7-sheet Excel report with separate Active/Inactive sheets, Discovery Stats, and Technologies
 
 ---
 
@@ -40,6 +40,7 @@ python security_scanner.py example.com
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Interactive Dashboard](#interactive-dashboard)
 - [Detailed Usage](#detailed-usage)
 - [Modular Architecture](#modular-architecture)
 - [99% Subdomain Coverage](#99-subdomain-coverage)
@@ -47,6 +48,7 @@ python security_scanner.py example.com
 - [Security Checklist](#security-checklist)
 - [Scoring Methodology](#scoring-methodology)
 - [Output Files](#output-files)
+- [Project Structure](#project-structure)
 - [Research Use Cases](#research-use-cases)
 - [Troubleshooting](#troubleshooting)
 - [Ethical Considerations](#ethical-considerations)
@@ -64,7 +66,7 @@ This repository provides an **ultra-simple, yet comprehensive Python security sc
 ✅ **Automatic subdomain discovery** - Finds all subdomains via Certificate Transparency + DNS probing  
 ✅ **Both www and non-www tested** - Tests portal.example.com AND www.portal.example.com  
 ✅ **Context-aware assessment** - 106 parameters, but only relevant checks per subdomain type  
-✅ **Professional Excel reports** - 5 sheets with security results, summaries, discovery stats, technologies, and checklist  
+✅ **Professional Excel reports** - 7 sheets: Security Results, Active/Inactive Subdomains, Summary, Discovery Stats, Technologies, Checklist  
 
 ### **`security_scanner.py`** - Single File, Complete Solution
 
@@ -74,7 +76,7 @@ This repository provides an **ultra-simple, yet comprehensive Python security sc
 - 🏷️ Classifies subdomains (webapp=106 checks, api=75+, static=70+, other=9)
 - 🔧 Detects technologies (servers, CMS, frameworks, languages, platforms)
 - 🔒 Assesses 106 security parameters (TLS, headers, DNS, auth, compliance)
-- 📊 Generates Excel report with 5 sheets (Security, Summary, Discovery Stats, Technologies, Checklist)
+- 📊 Generates Excel report with 7 sheets (Security Results, Active/Inactive Subdomains, Summary, Discovery Stats, Technologies, Checklist)
 
 **Perfect For:**
 - 🔒 **Security audits** - Any domain or organization
@@ -210,7 +212,7 @@ python security_scanner.py university.edu
 python security_scanner.py company.ac.lk
 python security_scanner.py government.gov
 
-# That's it! Automatically generates: website_ranking.xlsx
+# That's it! Automatically generates: example.com_security_report.xlsx
 ```
 
 **What happens automatically:**
@@ -219,7 +221,7 @@ python security_scanner.py government.gov
 3. ✅ Classifies each subdomain (webapp/api/static/other)
 4. ✅ Detects technologies (servers, CMS, frameworks, languages)
 5. ✅ Runs 106-parameter security assessment
-6. ✅ Generates 5-sheet Excel report with Discovery Stats and Technologies
+6. ✅ Generates 7-sheet Excel report (Security Results, Active/Inactive Subdomains, Summary, Discovery Stats, Technologies, Checklist)
 7. ✅ Reports comprehensive statistics (total discovered, active, by type, tech stack)
 
 ### **Alternative Options**
@@ -242,7 +244,92 @@ python security_scanner.py
 
 ---
 
-## 📖 Detailed Usage
+## � Interactive Dashboard
+
+After running the security scanner, visualize your results with the **interactive web-based dashboard**!
+
+### 🌐 Quick Start - Dashboard
+
+```bash
+# Option 1: Open locally (recommended for testing)
+open dashboard.html
+
+# Option 2: Deploy to GitHub Pages (free hosting!)
+# See docs/DASHBOARD_README.md for deployment guide
+```
+
+### ✨ Dashboard Features
+
+**NEW Enhanced Features:**
+- 🔄 **Multi-Sheet Selection** - Choose which website/sheet to visualize from dialog
+- 🎛️ **Advanced Filtering** - Search, type, risk level, score range filters
+- 📄 **PDF Export** - Generate professional security reports
+- 📊 **Custom Excel Export** - Export filtered data to Excel
+- 📈 **Interactive Charts** - Score distribution, type comparison, top vulnerabilities
+- 🔍 **Real-time Search** - Find specific subdomains instantly
+- 📱 **Mobile Responsive** - Works on all devices
+
+### 🎯 How It Works
+
+1. **Upload Excel Report**
+   ```
+   Drag & drop your security_report.xlsx file
+   ```
+
+2. **Select Sheet** (NEW!)
+   ```
+   Choose which website/domain to analyze
+   ```
+
+3. **Apply Filters** (NEW!)
+   ```
+   - Search: Find specific subdomains
+   - Type: Filter by webapp, api, static, other
+   - Risk: Show Critical, High, Medium, Low
+   - Score: Set min/max thresholds (0-100)
+   ```
+
+4. **View & Export**
+   ```
+   - Interactive charts and statistics
+   - Export PDF reports for stakeholders
+   - Export filtered Excel for further analysis
+   ```
+
+### 🚀 Deploy to GitHub Pages (Free!)
+
+Make your dashboard accessible online:
+
+```bash
+# 1. Push to GitHub (if not already done)
+git add dashboard.html
+git commit -m "Add security dashboard"
+git push origin master
+
+# 2. Enable GitHub Pages
+# Go to Settings → Pages → Select master branch → Save
+
+# 3. Access at:
+# https://yourusername.github.io/your-repo-name/dashboard.html
+```
+
+**Key Benefits:**
+- ✅ **100% Client-Side** - No server needed, data never uploaded
+- ✅ **Privacy-Focused** - All processing happens in your browser
+- ✅ **GitHub Pages Ready** - Free hosting, no configuration
+- ✅ **Shareable** - Send link to stakeholders
+- ✅ **Real-time Updates** - Just re-upload Excel file
+
+### 📚 Documentation
+
+- **User Guide**: [`docs/DASHBOARD_README.md`](docs/DASHBOARD_README.md) - Complete usage instructions
+- **Technical Docs**: [`docs/DASHBOARD_ENHANCEMENTS.md`](docs/DASHBOARD_ENHANCEMENTS.md) - Implementation details
+
+**Live Demo:** [View Dashboard Features](https://lalithk90.github.io/Subdomain_Security_Scanner_and_Auditor/dashboard.html)
+
+---
+
+## �📖 Detailed Usage
 
 ### Unified Scanner with Built-in Enumeration
 
@@ -354,7 +441,7 @@ Estimated time: ~2.8 minutes (with 3s rate limit)
 
 ...
 
-✅ Results saved to: website_ranking.xlsx
+✅ Results saved to: example.com_security_report.xlsx
 
 Summary By Type:
 Type    Count  Avg_Score  Median_Score  Max_Score  Min_Score
@@ -1024,23 +1111,94 @@ DNS-1       Low       DNSSEC (DS records)
 
 ### File Location
 
-- Default: `website_ranking.xlsx` (current directory)
+- Default: `{domain}_security_report.xlsx` (domain-based naming to avoid conflicts)
+  - Example: `example.com_security_report.xlsx`
+  - Example: `university.edu_security_report.xlsx`
 - Custom: Specify with `--output` flag
   ```bash
-  python security_scanner.py --domain example.com --output my_report.xlsx
+  python security_scanner.py example.com --output my_custom_report.xlsx
   ```
+
+**Benefits of domain-based naming:**
+- ✅ No filename conflicts when running multiple scans simultaneously
+- ✅ Easy identification of which report belongs to which domain
+- ✅ Organized workspace when auditing multiple organizations
 
 ---
 
-## 🔬 Research Use Cases & Data Analysis
+## � Project Structure
+
+```
+ac-lk-network-audit/
+├── security_scanner.py              # Main security scanner with 99% subdomain discovery
+├── dashboard.html                   # Interactive web dashboard for visualization
+├── requirements.txt                 # Python dependencies
+├── README.md                        # Main documentation (this file)
+│
+├── docs/                           # Documentation folder
+│   ├── DASHBOARD_README.md         # Dashboard user guide and deployment
+│   └── DASHBOARD_ENHANCEMENTS.md   # Technical implementation details
+│
+├── backup/                         # Backup files (git-ignored)
+│   └── dashboard.html.backup       # Previous dashboard version
+│
+└── performance_comparison.py       # Benchmarking tool for optimization testing
+```
+
+### 📄 File Descriptions
+
+| File | Description | Purpose |
+|------|-------------|---------|
+| `security_scanner.py` | Complete security scanner | Subdomain discovery + 106-parameter assessment |
+| `dashboard.html` | Interactive web dashboard | Visualize Excel reports with filters & exports |
+| `requirements.txt` | Python dependencies | Install with `pip install -r requirements.txt` |
+| `performance_comparison.py` | Benchmarking tool | Test openpyxl optimization performance |
+| `docs/DASHBOARD_README.md` | Dashboard guide | How to use and deploy dashboard |
+| `docs/DASHBOARD_ENHANCEMENTS.md` | Technical docs | Implementation details and customization |
+
+### 🎯 Workflow
+
+```
+1. Run Scanner          →  2. Get Excel Report      →  3. Visualize
+security_scanner.py        domain_security.xlsx        dashboard.html
+                                                      (with filters & export)
+```
+
+### 📊 Output Files
+
+The scanner generates domain-specific Excel files:
+
+```bash
+# Running scanner creates:
+python security_scanner.py example.com
+# → example.com_security_report.xlsx
+
+python security_scanner.py university.edu
+# → university.edu_security_report.xlsx
+
+# No filename conflicts when running multiple scans!
+```
+
+**Excel Structure (5 Sheets):**
+1. **Security Results** - All 106 parameters per subdomain
+2. **Active Subdomains** - HTTP/HTTPS responsive subdomains only
+3. **Inactive Subdomains** - DNS-only (not web-accessible)
+4. **Summary By Type** - Statistics grouped by type (webapp/api/static/other)
+5. **Discovery Stats** - Enumeration metrics and technology detection
+6. **Technologies** - Detected servers, CMS, frameworks, languages
+7. **Checklist** - Complete list of 106 security controls
+
+---
+
+## �🔬 Research Use Cases & Data Analysis
 
 ### 1. Comparative Domain Security Analysis
 ```python
 import pandas as pd
 
 # Load results
-df = pd.read_excel('website_ranking.xlsx', sheet_name='Security Results')
-summary = pd.read_excel('website_ranking.xlsx', sheet_name='Summary By Type')
+df = pd.read_excel('example.com_security_report.xlsx', sheet_name='Security Results')
+summary = pd.read_excel('example.com_security_report.xlsx', sheet_name='Summary By Type')
 
 # Compare organizations by root domain
 df['root_domain'] = df['Subdomain'].str.extract(r'([^.]+\.[^.]+)$')
@@ -1112,7 +1270,7 @@ for ctrl in controls:
             print(f"  {ctrl}: {failure_rate:.1f}% failure rate")
 
 # Critical checks (High priority) analysis
-checklist = pd.read_excel('website_ranking.xlsx', sheet_name='Checklist')
+checklist = pd.read_excel('example.com_security_report.xlsx', sheet_name='Checklist')
 high_priority = checklist[checklist['Priority'] == 'High']['Control_ID'].tolist()
 
 high_priority_failures = {}
@@ -1135,7 +1293,7 @@ for ctrl, rate in sorted(high_priority_failures.items(), key=lambda x: x[1], rev
 import pandas as pd
 
 # Load your scan results
-df = pd.read_excel('website_ranking.xlsx', sheet_name='Security Results')
+df = pd.read_excel('example.com_security_report.xlsx', sheet_name='Security Results')
 
 # Filter for .ac.lk domains
 df_aclk = df[df['Subdomain'].str.endswith('.ac.lk')]
@@ -1359,12 +1517,14 @@ python security_scanner.py
 
 | File | Content |
 |------|---------|
-| `website_ranking.xlsx` | Complete security report with 5 sheets |
+| `{domain}_security_report.xlsx` | Complete security report with 7 sheets (domain-based naming) |
 | Sheet 1: Security Results | All subdomains with scores and check results |
-| Sheet 2: Summary By Type | Statistics grouped by webapp/api/static/other |
-| Sheet 3: Discovery Stats | Total discovered, active, sources breakdown, tech stack counts |
-| Sheet 4: Technologies | Technology detection per subdomain (server, CMS, frameworks, languages) |
-| Sheet 5: Checklist | All 106 security controls reference |
+| Sheet 2: Active Subdomains | HTTP/HTTPS responsive subdomains only |
+| Sheet 3: Inactive Subdomains | DNS-only subdomains (not web-accessible) |
+| Sheet 4: Summary By Type | Statistics grouped by webapp/api/static/other |
+| Sheet 5: Discovery Stats | Total discovered, active, sources breakdown, tech stack counts |
+| Sheet 6: Technologies | Technology detection per subdomain (server, CMS, frameworks, languages) |
+| Sheet 7: Checklist | All 106 security controls reference |
 
 ### Remember
 

@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Scanner Dashboard - Interactive Report Viewer</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+    
+    <!-- Animate.css -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --success-color: #198754;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #0dcaf0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        
+        .main-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .hero-section {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .upload-zone {
+            border: 3px dashed #0d6efd;
+            border-radius: 15px;
+            padding: 60px 20px;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .upload-zone:hover {
+            background: #e7f1ff;
+            border-color: #0a58ca;
+            transform: scale(1.02);
+        }
+        
+        .upload-zone.dragover {
+            background: #cfe2ff;
+            border-color: #0a58ca;
+            transform: scale(1.05);
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card {
+            padding: 25px;
+            border-radius: 15px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: rgba(255,255,255,0.1);
+            transform: rotate(45deg);
+        }
+        
+        .stat-card i {
+            font-size: 3rem;
+            opacity: 0.3;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 350px;
+            padding: 20px;
+        }
+        
+        .badge-large {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .progress-bar-animated {
+            animation: progress-animation 1.5s ease-in-out;
+        }
+        
+        @keyframes progress-animation {
+            from { width: 0%; }
+        }
+        
+        #dashboard {
+            display: none;
+        }
+        
+        .table-responsive {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .btn-action {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-action:hover {
+            transform: scale(1.1);
+        }
+        
+        .risk-critical { background: linear-gradient(135deg, #dc3545, #b02a37); }
+        .risk-high { background: linear-gradient(135deg, #ffc107, #cc9a06); }
+        .risk-medium { background: linear-gradient(135deg, #0dcaf0, #0aa2c0); }
+        .risk-low { background: linear-gradient(135deg, #198754, #146c43); }
+        
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .loading-spinner.active {
+            display: block;
+        }
+        
+        .filter-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .filter-group {
+            margin-bottom: 15px;
+        }
+        
+        .export-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        @media (max-width: 768px) {
+            .stat-value { font-size: 1.8rem; }
+            .hero-section { padding: 20px; }
+            .chart-container { height: 250px; }
+            .export-buttons { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Upload Section -->
+        <div id="uploadSection">
+            <div class="hero-section animate__animated animate__fadeInDown">
+                <i class="fas fa-shield-alt text-primary mb-3" style="font-size: 4rem;"></i>
+                <h1 class="display-4 fw-bold mb-3">Security Scanner Dashboard</h1>
+                <p class="lead text-muted mb-4">
+                    Interactive Excel Report Viewer - No Server Required!
+                </p>
+                <p class="text-muted small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    All processing happens in your browser. Your data never leaves your computer.
+                </p>
+            </div>
+            
+            <div class="card animate__animated animate__fadeInUp">
+                <div class="card-body p-4">
+                    <div class="upload-zone" id="uploadZone">
+                        <i class="fas fa-cloud-upload-alt text-primary mb-3" style="font-size: 4rem;"></i>
+                        <h4 class="mb-3">Drop Excel File Here or Click to Browse</h4>
+                        <p class="text-muted mb-0">
+                            Supports: .xlsx and .xls files from security_scanner.py
+                        </p>
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+                    </div>
+                    
+                    <div class="loading-spinner" id="loadingSpinner">
+                        <div class="spinner-border text-primary" style="width: 4rem; height: 4rem;" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h5 class="mt-3">Processing Excel File...</h5>
+                        <p class="text-muted">This may take a few seconds for large reports</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4 g-3">
+                <div class="col-md-4">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-bolt text-warning mb-3" style="font-size: 2.5rem;"></i>
+                            <h5>Lightning Fast</h5>
+                            <p class="text-muted small mb-0">Client-side processing - no uploads needed</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-lock text-success mb-3" style="font-size: 2.5rem;"></i>
+                            <h5>100% Private</h5>
+                            <p class="text-muted small mb-0">Data never leaves your browser</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <i class="fas fa-github text-dark mb-3" style="font-size: 2.5rem;"></i>
+                            <h5>GitHub Pages Ready</h5>
+                            <p class="text-muted small mb-0">Deploy directly to GitHub Pages</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Scoring Methodology Section -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <h4 class="mb-3">
+                                <i class="fas fa-calculator text-primary me-2"></i>
+                                How Security Scores Are Calculated
+                            </h4>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Context-Aware Scoring:</strong> The scanner evaluates <strong>106 security parameters</strong> across <strong>20 categories</strong>, with different weights based on subdomain type (webapp/api/static/other).
+                            </div>
+                            
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <h5><i class="fas fa-list-check me-2"></i>Scoring Formula</h5>
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <p class="mb-2"><strong>Step 1:</strong> For each category, calculate:</p>
+                                            <code style="display: block; padding: 10px; background: white; border-radius: 5px; margin: 10px 0;">
+                                                Category Score = (Checks Passed / Total Checks) × Weight
+                                            </code>
+                                            <p class="mb-2"><strong>Step 2:</strong> Sum all 20 category scores:</p>
+                                            <code style="display: block; padding: 10px; background: white; border-radius: 5px; margin: 10px 0;">
+                                                Total Score = Σ Category Scores (0-100)
+                                            </code>
+                                            <p class="mb-2 mt-3"><strong>Example:</strong></p>
+                                            <ul class="small">
+                                                <li>TLS: 6/7 checks passed × 12% = 10.3 points</li>
+                                                <li>Headers: 12/15 checks × 15% = 12.0 points</li>
+                                                <li>Auth: 7/10 checks × 15% = 10.5 points</li>
+                                                <li>... (17 more categories)</li>
+                                                <li><strong>Total: 72.4/100</strong></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h5><i class="fas fa-shield-alt me-2"></i>Risk Rating Thresholds</h5>
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <p class="mb-3"><strong>Thresholds vary by subdomain type:</strong></p>
+                                            
+                                            <div class="mb-3">
+                                                <strong>🌐 WebApp / 🔌 API (Strict):</strong>
+                                                <ul class="small mb-0 mt-2">
+                                                    <li>✅ <strong>Low Risk:</strong> Score ≥ 80</li>
+                                                    <li>⚠️ <strong>Medium Risk:</strong> Score 60-79</li>
+                                                    <li>🔴 <strong>High Risk:</strong> Score 40-59</li>
+                                                    <li>💀 <strong>Critical Risk:</strong> Score &lt; 40</li>
+                                                </ul>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <strong>📄 Static Content (Moderate):</strong>
+                                                <ul class="small mb-0 mt-2">
+                                                    <li>✅ <strong>Low Risk:</strong> Score ≥ 70</li>
+                                                    <li>⚠️ <strong>Medium Risk:</strong> Score 50-69</li>
+                                                    <li>🔴 <strong>High Risk:</strong> Score 30-49</li>
+                                                    <li>💀 <strong>Critical Risk:</strong> Score &lt; 30</li>
+                                                </ul>
+                                            </div>
+                                            
+                                            <div>
+                                                <strong>🔧 Other Types (Relaxed):</strong>
+                                                <ul class="small mb-0 mt-2">
+                                                    <li>✅ <strong>Low Risk:</strong> Score ≥ 60</li>
+                                                    <li>⚠️ <strong>Medium Risk:</strong> Score 40-59</li>
+                                                    <li>🔴 <strong>High Risk:</strong> Score 20-39</li>
+                                                    <li>💀 <strong>Critical Risk:</strong> Score &lt; 20</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="accordion" id="scoringAccordion">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#categoryWeights">
+                                                    <i class="fas fa-balance-scale me-2"></i>
+                                                    Category Weights (20 Categories, 106 Parameters)
+                                                </button>
+                                            </h2>
+                                            <div id="categoryWeights" class="accordion-collapse collapse" data-bs-parent="#scoringAccordion">
+                                                <div class="accordion-body">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-sm table-hover">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Category</th>
+                                                                    <th class="text-center">WebApp</th>
+                                                                    <th class="text-center">API</th>
+                                                                    <th class="text-center">Static</th>
+                                                                    <th class="text-center">Other</th>
+                                                                    <th class="text-center">Checks</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr><td>TLS & Certificates</td><td class="text-center">10%</td><td class="text-center">15%</td><td class="text-center">15%</td><td class="text-center">20%</td><td class="text-center">7</td></tr>
+                                                                <tr><td>HTTP Security Headers</td><td class="text-center">12%</td><td class="text-center">10%</td><td class="text-center">18%</td><td class="text-center">15%</td><td class="text-center">15</td></tr>
+                                                                <tr><td>Authentication & Sessions</td><td class="text-center"><strong>15%</strong></td><td class="text-center"><strong>15%</strong></td><td class="text-center">2%</td><td class="text-center">5%</td><td class="text-center">10</td></tr>
+                                                                <tr><td>Input Validation</td><td class="text-center"><strong>12%</strong></td><td class="text-center"><strong>12%</strong></td><td class="text-center">2%</td><td class="text-center">5%</td><td class="text-center">9</td></tr>
+                                                                <tr><td>Access Control</td><td class="text-center">8%</td><td class="text-center">10%</td><td class="text-center">2%</td><td class="text-center">5%</td><td class="text-center">6</td></tr>
+                                                                <tr><td>DNS & Email Security</td><td class="text-center">5%</td><td class="text-center">3%</td><td class="text-center">8%</td><td class="text-center"><strong>15%</strong></td><td class="text-center">7</td></tr>
+                                                                <tr><td>File & Directory Security</td><td class="text-center">6%</td><td class="text-center">4%</td><td class="text-center">8%</td><td class="text-center">5%</td><td class="text-center">7</td></tr>
+                                                                <tr><td>Information Disclosure</td><td class="text-center">5%</td><td class="text-center">3%</td><td class="text-center">7%</td><td class="text-center">5%</td><td class="text-center">6</td></tr>
+                                                                <tr><td>Content Security</td><td class="text-center">4%</td><td class="text-center">2%</td><td class="text-center"><strong>10%</strong></td><td class="text-center">5%</td><td class="text-center">5</td></tr>
+                                                                <tr><td>Logging & Monitoring</td><td class="text-center">5%</td><td class="text-center">8%</td><td class="text-center">3%</td><td class="text-center">5%</td><td class="text-center">4</td></tr>
+                                                                <tr><td>API Security</td><td class="text-center">2%</td><td class="text-center"><strong>8%</strong></td><td class="text-center">1%</td><td class="text-center">1%</td><td class="text-center">3</td></tr>
+                                                                <tr><td>Cloud & Infrastructure</td><td class="text-center">3%</td><td class="text-center">5%</td><td class="text-center">5%</td><td class="text-center">5%</td><td class="text-center">4</td></tr>
+                                                                <tr><td>Compliance & Standards</td><td class="text-center">4%</td><td class="text-center">3%</td><td class="text-center">4%</td><td class="text-center">3%</td><td class="text-center">6</td></tr>
+                                                                <tr><td>Encryption & Data</td><td class="text-center">4%</td><td class="text-center">5%</td><td class="text-center">3%</td><td class="text-center">5%</td><td class="text-center">2</td></tr>
+                                                                <tr><td>Performance & Caching</td><td class="text-center">1%</td><td class="text-center">1%</td><td class="text-center">5%</td><td class="text-center">2%</td><td class="text-center">2</td></tr>
+                                                                <tr><td>Redirect Security</td><td class="text-center">3%</td><td class="text-center">1%</td><td class="text-center">2%</td><td class="text-center">2%</td><td class="text-center">2</td></tr>
+                                                                <tr><td>Advanced Controls</td><td class="text-center">2%</td><td class="text-center">3%</td><td class="text-center">2%</td><td class="text-center">2%</td><td class="text-center">2</td></tr>
+                                                                <tr><td>WAF & DDoS Protection</td><td class="text-center">2%</td><td class="text-center">3%</td><td class="text-center">2%</td><td class="text-center">3%</td><td class="text-center">2</td></tr>
+                                                                <tr><td>Third-Party Security</td><td class="text-center">2%</td><td class="text-center">3%</td><td class="text-center">4%</td><td class="text-center">3%</td><td class="text-center">2</td></tr>
+                                                                <tr><td>Subdomain Security</td><td class="text-center">1%</td><td class="text-center">1%</td><td class="text-center">1%</td><td class="text-center">5%</td><td class="text-center">2</td></tr>
+                                                                <tr class="table-primary"><td><strong>TOTAL</strong></td><td class="text-center"><strong>100%</strong></td><td class="text-center"><strong>100%</strong></td><td class="text-center"><strong>100%</strong></td><td class="text-center"><strong>100%</strong></td><td class="text-center"><strong>106</strong></td></tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                    <p class="text-muted small mt-2">
+                                                        <i class="fas fa-lightbulb me-1"></i>
+                                                        <strong>Note:</strong> Bold percentages indicate high-priority categories for that subdomain type. 
+                                                        For example, Authentication is 15% for webapps but only 2% for static sites.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#scoringExample">
+                                                    <i class="fas fa-graduation-cap me-2"></i>
+                                                    Real Example: How a WebApp Gets 72.4/100
+                                                </button>
+                                            </h2>
+                                            <div id="scoringExample" class="accordion-collapse collapse" data-bs-parent="#scoringAccordion">
+                                                <div class="accordion-body">
+                                                    <h6>Scenario: portal.example.com (Type: webapp)</h6>
+                                                    <div class="table-responsive mt-3">
+                                                        <table class="table table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Category</th>
+                                                                    <th class="text-center">Passed</th>
+                                                                    <th class="text-center">Total</th>
+                                                                    <th class="text-center">Rate</th>
+                                                                    <th class="text-center">Weight</th>
+                                                                    <th class="text-center">Points</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr>
+                                                                    <td>TLS & Certificates</td>
+                                                                    <td class="text-center">6</td>
+                                                                    <td class="text-center">7</td>
+                                                                    <td class="text-center">85.7%</td>
+                                                                    <td class="text-center">10%</td>
+                                                                    <td class="text-center"><strong>8.57</strong></td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <td>HTTP Security Headers</td>
+                                                                    <td class="text-center">12</td>
+                                                                    <td class="text-center">15</td>
+                                                                    <td class="text-center">80.0%</td>
+                                                                    <td class="text-center">12%</td>
+                                                                    <td class="text-center"><strong>9.60</strong></td>
+                                                                </tr>
+                                                                <tr class="table-warning">
+                                                                    <td>Authentication & Sessions</td>
+                                                                    <td class="text-center">7</td>
+                                                                    <td class="text-center">10</td>
+                                                                    <td class="text-center">70.0%</td>
+                                                                    <td class="text-center">15%</td>
+                                                                    <td class="text-center"><strong>10.50</strong></td>
+                                                                </tr>
+                                                                <tr class="table-warning">
+                                                                    <td>Input Validation</td>
+                                                                    <td class="text-center">8</td>
+                                                                    <td class="text-center">9</td>
+                                                                    <td class="text-center">88.9%</td>
+                                                                    <td class="text-center">12%</td>
+                                                                    <td class="text-center"><strong>10.67</strong></td>
+                                                                </tr>
+                                                                <tr>
+                                                                    <td colspan="5" class="text-end"><em>... 16 more categories ...</em></td>
+                                                                    <td class="text-center"><strong>33.06</strong></td>
+                                                                </tr>
+                                                                <tr class="table-success">
+                                                                    <td colspan="5" class="text-end"><strong>TOTAL SCORE</strong></td>
+                                                                    <td class="text-center"><strong>72.40/100</strong></td>
+                                                                </tr>
+                                                                <tr class="table-info">
+                                                                    <td colspan="5" class="text-end"><strong>RISK RATING</strong></td>
+                                                                    <td class="text-center"><strong>⚠️ Medium</strong></td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                    <div class="alert alert-warning mt-3">
+                                                        <strong>Interpretation:</strong> This webapp scores 72.4/100 (Medium Risk). 
+                                                        Priority improvements: Authentication (70% pass rate but 15% weight) and fixing the remaining 3 auth checks could add ~4.5 points.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#fullDocs">
+                                                    <i class="fas fa-book me-2"></i>
+                                                    Complete Documentation
+                                                </button>
+                                            </h2>
+                                            <div id="fullDocs" class="accordion-collapse collapse" data-bs-parent="#scoringAccordion">
+                                                <div class="accordion-body">
+                                                    <p>For complete scoring methodology including:</p>
+                                                    <ul>
+                                                        <li>All 106 security parameters explained</li>
+                                                        <li>Detailed weight justification by type</li>
+                                                        <li>Risk rating calculation logic</li>
+                                                        <li>Usage guide and examples</li>
+                                                        <li>FAQ and troubleshooting</li>
+                                                    </ul>
+                                                    <p>
+                                                        <strong>See:</strong> 
+                                                        <code>SCORING_GUIDE.md</code> in the project repository
+                                                    </p>
+                                                    <p class="mb-0">
+                                                        <a href="https://github.com/LalithK90/ac-lk-network-audit/blob/master/SCORING_GUIDE.md" target="_blank" class="btn btn-primary btn-sm">
+                                                            <i class="fas fa-external-link-alt me-2"></i>
+                                                            View Full Documentation
+                                                        </a>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dashboard Section -->
+        <div id="dashboard">
+            <!-- Header -->
+            <div class="card bg-white animate__animated animate__fadeInDown">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                        <div>
+                            <h2 class="mb-1">
+                                <i class="fas fa-chart-line me-2 text-primary"></i>
+                                Security Dashboard
+                            </h2>
+                            <p class="text-muted mb-0">
+                                <i class="fas fa-file-excel me-1"></i>
+                                <span id="fileName">Loading...</span>
+                                <span class="ms-3"><i class="fas fa-database me-1"></i>Sheet: <strong id="selectedSheet">-</strong></span>
+                            </p>
+                        </div>
+                        <div class="export-buttons">
+                            <button class="btn btn-success" onclick="exportToPDF()">
+                                <i class="fas fa-file-pdf me-2"></i>Export PDF
+                            </button>
+                            <button class="btn btn-info" onclick="exportToCustomExcel()">
+                                <i class="fas fa-file-excel me-2"></i>Export Excel
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="changeSheet()">
+                                <i class="fas fa-exchange-alt me-2"></i>Change Sheet
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="resetDashboard()">
+                                <i class="fas fa-upload me-2"></i>New File
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Statistics Cards -->
+            <div class="row g-3 mt-2">
+                <div class="col-lg-3 col-md-6">
+                    <div class="stat-card risk-low animate__animated animate__fadeInUp">
+                        <div class="stat-label">Total Subdomains</div>
+                        <div class="stat-value" id="totalSubdomains">0</div>
+                        <i class="fas fa-sitemap"></i>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="stat-card" style="background: linear-gradient(135deg, #0d6efd, #0a58ca);" 
+                         class="animate__animated animate__fadeInUp" style="animation-delay: 0.1s;">
+                        <div class="stat-label">Active Subdomains</div>
+                        <div class="stat-value" id="activeSubdomains">0</div>
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="stat-card risk-high animate__animated animate__fadeInUp" style="animation-delay: 0.2s;">
+                        <div class="stat-label">Average Score</div>
+                        <div class="stat-value" id="avgScore">0%</div>
+                        <i class="fas fa-star"></i>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="stat-card risk-critical animate__animated animate__fadeInUp" style="animation-delay: 0.3s;">
+                        <div class="stat-label">High Risk</div>
+                        <div class="stat-value" id="highRisk">0</div>
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Advanced Filters -->
+            <div class="card mt-3 animate__animated animate__fadeIn">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-filter me-2 text-primary"></i>
+                        Advanced Filters & Search
+                    </h5>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Search Subdomain</label>
+                            <input type="text" class="form-control" id="searchInput" placeholder="Search...">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Type</label>
+                            <select class="form-select" id="typeFilter">
+                                <option value="">All Types</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Risk Level</label>
+                            <select class="form-select" id="riskFilter">
+                                <option value="">All Risks</option>
+                                <option value="Critical">Critical</option>
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                                <option value="Minimal">Minimal</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Min Score</label>
+                            <input type="number" class="form-control" id="minScore" placeholder="0" min="0" max="100">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">Max Score</label>
+                            <input type="number" class="form-control" id="maxScore" placeholder="100" min="0" max="100">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small fw-bold">&nbsp;</label>
+                            <button class="btn btn-danger w-100" onclick="clearFilters()" title="Clear all filters">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Charts Row -->
+            <div class="row mt-3 g-3">
+                <div class="col-lg-6">
+                    <div class="card animate__animated animate__fadeInLeft">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-chart-pie me-2 text-primary"></i>
+                                Security Score Distribution
+                            </h5>
+                            <div class="chart-container">
+                                <canvas id="scoreDistChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card animate__animated animate__fadeInRight">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-chart-bar me-2 text-success"></i>
+                                Subdomain Type Comparison
+                            </h5>
+                            <div class="chart-container">
+                                <canvas id="typeChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Vulnerabilities Chart -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card animate__animated animate__fadeInUp">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-bug me-2 text-danger"></i>
+                                Top 10 Vulnerabilities
+                            </h5>
+                            <div style="height: 400px; padding: 20px;">
+                                <canvas id="vulnChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Subdomains Table -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card animate__animated animate__fadeIn">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">
+                                <i class="fas fa-table me-2 text-info"></i>
+                                Subdomains Details
+                                <span class="badge bg-primary ms-2" id="tableCount">0</span>
+                            </h5>
+                            <div class="table-responsive">
+                                <table id="subdomainsTable" class="table table-hover table-striped" style="width:100%">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Subdomain</th>
+                                            <th>Type</th>
+                                            <th>Score</th>
+                                            <th>Risk Level</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Footer -->
+    <footer class="text-center text-white mt-5 py-3">
+        <p class="mb-0">
+            <i class="fas fa-shield-alt me-2"></i>
+            Security Scanner Dashboard | Built with ❤️ for Security Research
+        </p>
+        <p class="mb-0 small">
+            Powered by SheetJS, Chart.js, DataTables, jsPDF & Bootstrap
+        </p>
+    </footer>
+    
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- SheetJS (for Excel reading) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+    
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
+    <script>
+        let workbook = null;
+        let dataTable = null;
+        let charts = {};
+        let currentData = [];
+        let allSheets = [];
+        let currentSheet = '';
+        let currentFileName = '';
+        
+        // Upload zone interactions
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        
+        uploadZone.addEventListener('click', () => fileInput.click());
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+        
+        function handleFile(file) {
+            if (!file.name.match(/\.(xlsx|xls)$/)) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid File',
+                    text: 'Please upload an Excel file (.xlsx or .xls)',
+                    confirmButtonColor: '#dc3545'
+                });
+                return;
+            }
+            
+            currentFileName = file.name;
+            document.getElementById('loadingSpinner').classList.add('active');
+            document.getElementById('uploadZone').style.display = 'none';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    workbook = XLSX.read(data, {type: 'array'});
+                    
+                    document.getElementById('fileName').textContent = file.name;
+                    allSheets = workbook.SheetNames;
+                    
+                    // Show sheet selection dialog
+                    showSheetSelectionDialog();
+                    
+                } catch (error) {
+                    console.error('Error reading file:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Failed to read Excel file: ' + error.message,
+                        confirmButtonColor: '#dc3545'
+                    });
+                    resetDashboard();
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function showSheetSelectionDialog() {
+            const options = {};
+            allSheets.forEach(sheet => {
+                options[sheet] = sheet;
+            });
+            
+            Swal.fire({
+                title: 'Select Website/Sheet to Display',
+                html: `
+                    <div class="text-start">
+                        <p class="text-muted mb-3">Available sheets in this Excel file:</p>
+                        <select id="sheetSelector" class="form-select form-select-lg">
+                            ${allSheets.map(sheet => `<option value="${sheet}">${sheet}</option>`).join('')}
+                        </select>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Load Sheet',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#0d6efd',
+                width: 600,
+                preConfirm: () => {
+                    const selected = document.getElementById('sheetSelector').value;
+                    if (!selected) {
+                        Swal.showValidationMessage('Please select a sheet');
+                    }
+                    return selected;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    currentSheet = result.value;
+                    document.getElementById('selectedSheet').textContent = currentSheet;
+                    processExcelData(currentSheet);
+                    
+                    setTimeout(() => {
+                        document.getElementById('loadingSpinner').classList.remove('active');
+                        document.getElementById('uploadSection').style.display = 'none';
+                        document.getElementById('dashboard').style.display = 'block';
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success!',
+                            text: `Sheet "${currentSheet}" loaded successfully`,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    }, 500);
+                } else {
+                    resetDashboard();
+                }
+            });
+        }
+        
+        function changeSheet() {
+            if (!workbook) return;
+            showSheetSelectionDialog();
+        }
+        
+        function processExcelData(sheetName) {
+            const dataSheet = workbook.Sheets[sheetName];
+            
+            if (!dataSheet) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Sheet Not Found',
+                    text: `Sheet "${sheetName}" not found in workbook`,
+                    confirmButtonColor: '#dc3545'
+                });
+                return;
+            }
+            
+            // Convert sheet to JSON
+            const jsonData = XLSX.utils.sheet_to_json(dataSheet);
+            
+            if (jsonData.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'No Data',
+                    text: 'The selected sheet appears to be empty',
+                    confirmButtonColor: '#ffc107'
+                });
+                return;
+            }
+            
+            currentData = jsonData;
+            
+            // Populate type filter
+            populateTypeFilter(jsonData);
+            
+            // Update statistics
+            updateStatistics(jsonData);
+            
+            // Create charts
+            createCharts(jsonData);
+            
+            // Create table
+            createTable(jsonData);
+            
+            // Setup filter listeners
+            setupFilterListeners();
+        }
+        
+        function populateTypeFilter(data) {
+            const types = new Set();
+            data.forEach(row => {
+                if (row.Type) types.add(row.Type);
+            });
+            
+            const typeFilter = document.getElementById('typeFilter');
+            typeFilter.innerHTML = '<option value="">All Types</option>';
+            types.forEach(type => {
+                typeFilter.innerHTML += `<option value="${type}">${type}</option>`;
+            });
+        }
+        
+        function setupFilterListeners() {
+            document.getElementById('searchInput').addEventListener('keyup', applyFilters);
+            document.getElementById('typeFilter').addEventListener('change', applyFilters);
+            document.getElementById('riskFilter').addEventListener('change', applyFilters);
+            document.getElementById('minScore').addEventListener('input', applyFilters);
+            document.getElementById('maxScore').addEventListener('input', applyFilters);
+        }
+        
+        function applyFilters() {
+            if (!dataTable) return;
+            
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const typeFilter = document.getElementById('typeFilter').value;
+            const riskFilter = document.getElementById('riskFilter').value;
+            const minScore = parseFloat(document.getElementById('minScore').value) || 0;
+            const maxScore = parseFloat(document.getElementById('maxScore').value) || 100;
+            
+            dataTable.rows().every(function() {
+                const data = this.data();
+                let show = true;
+                
+                // Search filter
+                if (searchTerm && !data.subdomain.toLowerCase().includes(searchTerm)) {
+                    show = false;
+                }
+                
+                // Type filter
+                if (typeFilter && data.type !== typeFilter) {
+                    show = false;
+                }
+                
+                // Risk filter
+                if (riskFilter && data.riskLevel !== riskFilter) {
+                    show = false;
+                }
+                
+                // Score range filter
+                if (data.score < minScore || data.score > maxScore) {
+                    show = false;
+                }
+                
+                if (show) {
+                    $(this.node()).show();
+                } else {
+                    $(this.node()).hide();
+                }
+            });
+            
+            // Update count
+            const visibleCount = dataTable.rows(':visible').count();
+            document.getElementById('tableCount').textContent = visibleCount;
+        }
+        
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('typeFilter').value = '';
+            document.getElementById('riskFilter').value = '';
+            document.getElementById('minScore').value = '';
+            document.getElementById('maxScore').value = '';
+            applyFilters();
+        }
+        
+        function updateStatistics(data) {
+            const total = data.length;
+            const active = data.filter(row => row.Scan_Success === true || row.Scan_Success === 'TRUE' || row.Scan_Success === 'True').length;
+            
+            let totalScore = 0;
+            let highRisk = 0;
+            let scoreCount = 0;
+            
+            data.forEach(row => {
+                const score = parseFloat(row.Total_Score || 0);
+                if (!isNaN(score)) {
+                    totalScore += score;
+                    scoreCount++;
+                    if (score < 50) highRisk++;
+                }
+            });
+            
+            const avgScore = scoreCount > 0 ? (totalScore / scoreCount).toFixed(1) : 0;
+            
+            // Animate numbers
+            animateValue('totalSubdomains', 0, total, 1000);
+            animateValue('activeSubdomains', 0, active, 1000);
+            animateValue('avgScore', 0, avgScore, 1000, '%');
+            animateValue('highRisk', 0, highRisk, 1000);
+        }
+        
+        function animateValue(id, start, end, duration, suffix = '') {
+            const element = document.getElementById(id);
+            const range = end - start;
+            const increment = range / (duration / 16);
+            let current = start;
+            
+            const timer = setInterval(() => {
+                current += increment;
+                if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                    current = end;
+                    clearInterval(timer);
+                }
+                element.textContent = Math.round(current) + suffix;
+            }, 16);
+        }
+        
+        function createCharts(data) {
+            // Destroy existing charts
+            for (const chart in charts) {
+                if (charts[chart]) {
+                    charts[chart].destroy();
+                }
+            }
+            
+            // Score Distribution Chart
+            const scoreBins = {
+                'Critical (0-25)': 0,
+                'High (26-50)': 0,
+                'Medium (51-75)': 0,
+                'Good (76-90)': 0,
+                'Excellent (91-100)': 0
+            };
+            
+            data.forEach(row => {
+                const score = parseFloat(row.Total_Score || 0);
+                if (score <= 25) scoreBins['Critical (0-25)']++;
+                else if (score <= 50) scoreBins['High (26-50)']++;
+                else if (score <= 75) scoreBins['Medium (51-75)']++;
+                else if (score <= 90) scoreBins['Good (76-90)']++;
+                else scoreBins['Excellent (91-100)']++;
+            });
+            
+            const scoreCtx = document.getElementById('scoreDistChart').getContext('2d');
+            charts.scoreChart = new Chart(scoreCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(scoreBins),
+                    datasets: [{
+                        data: Object.values(scoreBins),
+                        backgroundColor: [
+                            'rgba(220, 53, 69, 0.8)',
+                            'rgba(255, 193, 7, 0.8)',
+                            'rgba(13, 202, 240, 0.8)',
+                            'rgba(13, 110, 253, 0.8)',
+                            'rgba(25, 135, 84, 0.8)'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { padding: 15, font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+            
+            // Type Comparison Chart
+            const typeScores = {};
+            const typeCounts = {};
+            
+            data.forEach(row => {
+                const type = row.Type || 'other';
+                const score = parseFloat(row.Total_Score || 0);
+                
+                if (!typeScores[type]) {
+                    typeScores[type] = 0;
+                    typeCounts[type] = 0;
+                }
+                typeScores[type] += score;
+                typeCounts[type]++;
+            });
+            
+            const typeAvgs = {};
+            for (const type in typeScores) {
+                typeAvgs[type] = (typeScores[type] / typeCounts[type]).toFixed(2);
+            }
+            
+            const typeCtx = document.getElementById('typeChart').getContext('2d');
+            charts.typeChart = new Chart(typeCtx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(typeAvgs),
+                    datasets: [{
+                        label: 'Average Score',
+                        data: Object.values(typeAvgs),
+                        backgroundColor: [
+                            'rgba(13, 110, 253, 0.7)',
+                            'rgba(25, 135, 84, 0.7)',
+                            'rgba(255, 193, 7, 0.7)',
+                            'rgba(220, 53, 69, 0.7)',
+                            'rgba(108, 117, 125, 0.7)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, max: 100 }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            
+            // Vulnerabilities Chart
+            const vulnData = getTopVulnerabilities(data);
+            const vulnCtx = document.getElementById('vulnChart').getContext('2d');
+            charts.vulnChart = new Chart(vulnCtx, {
+                type: 'bar',
+                data: {
+                    labels: vulnData.labels,
+                    datasets: [{
+                        label: 'Failure Rate (%)',
+                        data: vulnData.data,
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, max: 100 }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+        
+        function getTopVulnerabilities(data) {
+            const vulnCounts = {};
+            const totalRows = data.length;
+            
+            // Find all columns ending with '_Pass'
+            if (data.length > 0) {
+                const sampleRow = data[0];
+                for (const key in sampleRow) {
+                    if (key.endsWith('_Pass')) {
+                        vulnCounts[key.replace('_Pass', '')] = 0;
+                    }
+                }
+            }
+            
+            // Count failures
+            data.forEach(row => {
+                for (const vuln in vulnCounts) {
+                    if (row[vuln + '_Pass'] === 'No' || row[vuln + '_Pass'] === 'NO' || row[vuln + '_Pass'] === false) {
+                        vulnCounts[vuln]++;
+                    }
+                }
+            });
+            
+            // Calculate percentages and sort
+            const vulnPercentages = {};
+            for (const vuln in vulnCounts) {
+                vulnPercentages[vuln] = ((vulnCounts[vuln] / totalRows) * 100).toFixed(1);
+            }
+            
+            // Get top 10
+            const sorted = Object.entries(vulnPercentages)
+                .sort((a, b) => parseFloat(b[1]) - parseFloat(a[1]))
+                .slice(0, 10);
+            
+            return {
+                labels: sorted.map(v => v[0]),
+                data: sorted.map(v => parseFloat(v[1]))
+            };
+        }
+        
+        function createTable(data) {
+            const tableData = data.map((row, index) => {
+                const score = parseFloat(row.Total_Score || 0);
+                let riskLevel = 'Minimal';
+                let riskClass = 'success';
+                
+                if (score < 25) { riskLevel = 'Critical'; riskClass = 'danger'; }
+                else if (score < 50) { riskLevel = 'High'; riskClass = 'warning'; }
+                else if (score < 75) { riskLevel = 'Medium'; riskClass = 'info'; }
+                else if (score < 90) { riskLevel = 'Low'; riskClass = 'primary'; }
+                
+                return {
+                    index: index + 1,
+                    subdomain: row.Subdomain || '',
+                    type: row.Type || 'other',
+                    score: score,
+                    riskLevel: riskLevel,
+                    riskClass: riskClass,
+                    rawData: row
+                };
+            });
+            
+            if (dataTable) {
+                dataTable.destroy();
+            }
+            
+            dataTable = $('#subdomainsTable').DataTable({
+                data: tableData,
+                columns: [
+                    { data: 'index' },
+                    {
+                        data: 'subdomain',
+                        render: function(data) {
+                            return `<a href="https://${data}" target="_blank" class="text-decoration-none">
+                                <i class="fas fa-external-link-alt me-1 small"></i>${data}</a>`;
+                        }
+                    },
+                    {
+                        data: 'type',
+                        render: function(data) {
+                            const badges = {
+                                'webapp': 'primary', 'api': 'success', 'static': 'info',
+                                'website': 'warning', 'other': 'secondary'
+                            };
+                            return `<span class="badge bg-${badges[data] || 'secondary'}">${data}</span>`;
+                        }
+                    },
+                    {
+                        data: 'score',
+                        render: function(data) {
+                            let color = 'danger';
+                            if (data >= 90) color = 'success';
+                            else if (data >= 75) color = 'primary';
+                            else if (data >= 50) color = 'warning';
+                            
+                            return `<div class="progress" style="height: 25px;">
+                                <div class="progress-bar bg-${color} progress-bar-animated" style="width: ${data}%">
+                                    <strong>${data.toFixed(1)}%</strong>
+                                </div></div>`;
+                        }
+                    },
+                    {
+                        data: 'riskLevel',
+                        render: function(data, type, row) {
+                            return `<span class="badge bg-${row.riskClass}">${data}</span>`;
+                        }
+                    }
+                ],
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                order: [[3, 'asc']],
+                dom: 'Bfrtip',
+                buttons: [
+                    { extend: 'excel', text: '<i class="fas fa-file-excel me-1"></i> Excel', className: 'btn btn-success btn-sm' },
+                    { extend: 'csv', text: '<i class="fas fa-file-csv me-1"></i> CSV', className: 'btn btn-info btn-sm' },
+                    { extend: 'print', text: '<i class="fas fa-print me-1"></i> Print', className: 'btn btn-secondary btn-sm' }
+                ],
+                language: {
+                    search: "_INPUT_",
+                    searchPlaceholder: "Search subdomains..."
+                }
+            });
+            
+            document.getElementById('tableCount').textContent = tableData.length;
+        }
+        
+        async function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            
+            Swal.fire({
+                title: 'Generating PDF...',
+                html: 'Please wait while we create your report',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            try {
+                const doc = new jsPDF('p', 'mm', 'a4');
+                let yPos = 20;
+                
+                // Title
+                doc.setFontSize(20);
+                doc.setTextColor(13, 110, 253);
+                doc.text('Security Scanner Report', 105, yPos, { align: 'center' });
+                yPos += 10;
+                
+                // Metadata
+                doc.setFontSize(10);
+                doc.setTextColor(100);
+                doc.text(`File: ${currentFileName}`, 20, yPos);
+                yPos += 5;
+                doc.text(`Sheet: ${currentSheet}`, 20, yPos);
+                yPos += 5;
+                doc.text(`Generated: ${new Date().toLocaleString()}`, 20, yPos);
+                yPos += 15;
+                
+                // Statistics
+                doc.setFontSize(14);
+                doc.setTextColor(0);
+                doc.text('Summary Statistics', 20, yPos);
+                yPos += 10;
+                
+                const stats = [
+                    ['Total Subdomains', document.getElementById('totalSubdomains').textContent],
+                    ['Active Subdomains', document.getElementById('activeSubdomains').textContent],
+                    ['Average Score', document.getElementById('avgScore').textContent],
+                    ['High Risk Count', document.getElementById('highRisk').textContent]
+                ];
+                
+                doc.autoTable({
+                    startY: yPos,
+                    head: [['Metric', 'Value']],
+                    body: stats,
+                    theme: 'grid',
+                    headStyles: { fillColor: [13, 110, 253] }
+                });
+                
+                yPos = doc.lastAutoTable.finalY + 15;
+                
+                // Data table
+                doc.setFontSize(14);
+                doc.text('Subdomain Details', 20, yPos);
+                yPos += 10;
+                
+                const tableData = [];
+                dataTable.rows({ search: 'applied' }).every(function() {
+                    const data = this.data();
+                    tableData.push([
+                        data.index,
+                        data.subdomain,
+                        data.type,
+                        data.score.toFixed(1),
+                        data.riskLevel
+                    ]);
+                });
+                
+                doc.autoTable({
+                    startY: yPos,
+                    head: [['#', 'Subdomain', 'Type', 'Score', 'Risk']],
+                    body: tableData.slice(0, 50), // Limit to first 50 for PDF size
+                    theme: 'striped',
+                    headStyles: { fillColor: [13, 110, 253] },
+                    styles: { fontSize: 8 }
+                });
+                
+                // Footer
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(8);
+                    doc.setTextColor(150);
+                    doc.text(`Page ${i} of ${pageCount}`, 105, 285, { align: 'center' });
+                }
+                
+                doc.save(`security_report_${currentSheet}_${Date.now()}.pdf`);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'PDF Generated!',
+                    text: 'Your report has been downloaded',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to generate PDF: ' + error.message,
+                    confirmButtonColor: '#dc3545'
+                });
+            }
+        }
+        
+        async function exportToCustomExcel() {
+            try {
+                // Get visible/filtered data
+                const exportData = [];
+                dataTable.rows({ search: 'applied' }).every(function() {
+                    exportData.push(this.data().rawData);
+                });
+                
+                if (exportData.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'No Data',
+                        text: 'No data available to export',
+                        confirmButtonColor: '#ffc107'
+                    });
+                    return;
+                }
+                
+                // Create new workbook
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Filtered Data");
+                
+                // Generate file
+                XLSX.writeFile(wb, `security_report_filtered_${currentSheet}_${Date.now()}.xlsx`);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Excel Exported!',
+                    text: `${exportData.length} rows exported successfully`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                
+            } catch (error) {
+                console.error('Excel export error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Failed to export Excel: ' + error.message,
+                    confirmButtonColor: '#dc3545'
+                });
+            }
+        }
+        
+        function resetDashboard() {
+            document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('uploadZone').style.display = 'block';
+            document.getElementById('loadingSpinner').classList.remove('active');
+            fileInput.value = '';
+            
+            // Destroy charts
+            for (const chart in charts) {
+                if (charts[chart]) {
+                    charts[chart].destroy();
+                }
+            }
+            charts = {};
+            
+            // Destroy table
+            if (dataTable) {
+                dataTable.destroy();
+                dataTable = null;
+            }
+            
+            // Reset variables
+            workbook = null;
+            currentData = [];
+            allSheets = [];
+            currentSheet = '';
+            currentFileName = '';
+        }
+    </script>
+</body>
+</html>
