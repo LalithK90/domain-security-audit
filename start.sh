@@ -50,25 +50,57 @@ fi
 echo ""
 
 # ============================================================================
-# STEP 2: Activate Python environment
+# STEP 2: Check/Create/Activate Python virtual environment
 # ============================================================================
 echo -e "${BLUE}════════════════════════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}Step 2: Activating Python environment...${NC}"
+echo -e "${GREEN}Step 2: Setting up Python virtual environment...${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Initialize conda for bash
-eval "$(conda shell.bash hook)"
+VENV_DIR="venv"
 
-# Activate the mri_data environment
-echo "Activating conda environment: mri_data"
-conda activate mri_data
+# Check if venv directory exists
+if [ -d "$VENV_DIR" ]; then
+    echo -e "${GREEN}✅ Virtual environment found: $VENV_DIR${NC}"
+else
+    echo -e "${YELLOW}⚠️  Virtual environment not found. Creating new venv...${NC}"
+    
+    # Create virtual environment
+    python3 -m venv "$VENV_DIR"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Virtual environment created successfully${NC}"
+        
+        # Activate and install dependencies
+        source "$VENV_DIR/bin/activate"
+        
+        if [ -f "requirements.txt" ]; then
+            echo "Installing dependencies from requirements.txt..."
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✅ Dependencies installed${NC}"
+            else
+                echo -e "${RED}❌ Failed to install dependencies${NC}"
+                exit 1
+            fi
+        fi
+    else
+        echo -e "${RED}❌ Failed to create virtual environment${NC}"
+        exit 1
+    fi
+fi
+
+# Activate the virtual environment
+echo "Activating virtual environment..."
+source "$VENV_DIR/bin/activate"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Environment activated: $(which python)${NC}"
     python --version
 else
-    echo -e "${RED}❌ Failed to activate conda environment${NC}"
+    echo -e "${RED}❌ Failed to activate virtual environment${NC}"
     exit 1
 fi
 echo ""

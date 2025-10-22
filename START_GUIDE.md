@@ -15,8 +15,11 @@ That's it! The script will handle everything automatically.
    - Pulls updates if available
    - Continues with local version if already up-to-date
 
-2. **Activates Environment** 🐍
-   - Activates conda `mri_data` environment
+2. **Sets Up Python Environment** 🐍
+   - Checks if `venv` directory exists
+   - Creates new virtual environment if not found
+   - Installs dependencies from `requirements.txt` (first time only)
+   - Activates the virtual environment
    - Verifies Python is ready
 
 3. **Runs Security Scans** 🔍
@@ -58,8 +61,17 @@ The script will:
 ## Requirements
 
 - Git configured with SSH or HTTPS credentials
-- Conda with `mri_data` environment
-- All dependencies installed in the environment (see `requirements.txt`)
+- Python 3.8+ installed
+- Dependencies will be installed automatically on first run
+
+## First Run
+
+On the first run, the script will:
+1. Create a `venv` directory
+2. Install all dependencies from `requirements.txt`
+3. This takes a few minutes (one-time setup)
+
+Subsequent runs will skip this step and just activate the existing environment.
 
 ## Logs
 
@@ -71,9 +83,14 @@ To save output to a log file:
 
 ## Troubleshooting
 
-**"conda: command not found"**
-- Make sure conda is in your PATH
-- Try: `source ~/anaconda3/etc/profile.d/conda.sh` (adjust path)
+**"python3: command not found"**
+- Install Python 3.8 or higher
+- macOS: `brew install python3`
+- Check: `python3 --version`
+
+**"ModuleNotFoundError" after creating venv**
+- Delete the venv directory: `rm -rf venv`
+- Run start.sh again to recreate and reinstall dependencies
 
 **"fatal: could not read Username"**
 - Configure Git credentials
