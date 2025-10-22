@@ -106,10 +106,10 @@ fi
 echo ""
 
 # ============================================================================
-# STEP 3: Run security scans
+# STEP 3: Run security scans (in parallel)
 # ============================================================================
 echo -e "${BLUE}════════════════════════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}Step 3: Running security scans...${NC}"
+echo -e "${GREEN}Step 3: Running security scans in parallel...${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -117,51 +117,80 @@ echo ""
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 FILE_TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
-# Scan 1: ac.lk
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}🔍 Scanning domain: ac.lk${NC}"
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${YELLOW}🔍 Starting both domain scans simultaneously...${NC}"
 echo ""
-echo "Output: ac.lk_security_report.xlsx"
+echo "  • ac.lk  → ac.lk_security_report.xlsx"
+echo "  • gov.lk → gov.lk_security_report.xlsx"
+echo ""
 echo "Started at: $(date '+%H:%M:%S')"
 echo ""
 
-python security_scanner.py ac.lk --output ac.lk_security_report.xlsx
+# Create log files for each scan
+AC_LOG="ac_lk_scan_${FILE_TIMESTAMP}.log"
+GOV_LOG="gov_lk_scan_${FILE_TIMESTAMP}.log"
 
-if [ $? -eq 0 ]; then
-    echo ""
+# Run both scans in background
+echo -e "${BLUE}[ac.lk]${NC}  Scan running in background... (log: $AC_LOG)"
+python security_scanner.py ac.lk --output ac.lk_security_report.xlsx > "$AC_LOG" 2>&1 &
+AC_PID=$!
+
+echo -e "${BLUE}[gov.lk]${NC} Scan running in background... (log: $GOV_LOG)"
+python security_scanner.py gov.lk --output gov.lk_security_report.xlsx > "$GOV_LOG" 2>&1 &
+GOV_PID=$!
+
+echo ""
+echo "Background processes started:"
+echo "  • ac.lk  (PID: $AC_PID)"
+echo "  • gov.lk (PID: $GOV_PID)"
+echo ""
+echo -e "${YELLOW}⏳ Waiting for both scans to complete...${NC}"
+echo "   (This may take 2-3 hours depending on subdomain count)"
+echo ""
+
+# Wait for both processes and track their exit codes
+wait $AC_PID
+AC_EXIT=$?
+
+wait $GOV_PID
+GOV_EXIT=$?
+
+echo ""
+echo "════════════════════════════════════════════════════════════════════════════════"
+echo "Scan Results:"
+echo "════════════════════════════════════════════════════════════════════════════════"
+
+# Check ac.lk result
+if [ $AC_EXIT -eq 0 ]; then
     echo -e "${GREEN}✅ ac.lk scan completed successfully${NC}"
-    echo "Finished at: $(date '+%H:%M:%S')"
 else
-    echo ""
-    echo -e "${RED}❌ ac.lk scan failed${NC}"
-    exit 1
+    echo -e "${RED}❌ ac.lk scan failed (exit code: $AC_EXIT)${NC}"
+    echo "   Check log: $AC_LOG"
 fi
-echo ""
 
-# Scan 2: gov.lk
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${YELLOW}🔍 Scanning domain: gov.lk${NC}"
-echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-echo "Output: gov.lk_security_report.xlsx"
-echo "Started at: $(date '+%H:%M:%S')"
-echo ""
-
-python security_scanner.py gov.lk --output gov.lk_security_report.xlsx
-
-if [ $? -eq 0 ]; then
-    echo ""
+# Check gov.lk result
+if [ $GOV_EXIT -eq 0 ]; then
     echo -e "${GREEN}✅ gov.lk scan completed successfully${NC}"
-    echo "Finished at: $(date '+%H:%M:%S')"
 else
-    echo ""
-    echo -e "${RED}❌ gov.lk scan failed${NC}"
+    echo -e "${RED}❌ gov.lk scan failed (exit code: $GOV_EXIT)${NC}"
+    echo "   Check log: $GOV_LOG"
+fi
+
+echo ""
+echo "Finished at: $(date '+%H:%M:%S')"
+echo ""
+
+# Exit with error if any scan failed
+if [ $AC_EXIT -ne 0 ] || [ $GOV_EXIT -ne 0 ]; then
+    echo -e "${RED}❌ One or more scans failed. Check the logs above.${NC}"
     exit 1
 fi
-echo ""
 
 echo -e "${GREEN}✅ All scans completed successfully!${NC}"
+echo ""
+
+# Clean up log files if scans were successful
+rm -f "$AC_LOG" "$GOV_LOG"
+echo -e "${BLUE}ℹ️  Scan logs deleted (both scans successful)${NC}"
 echo ""
 
 # ============================================================================

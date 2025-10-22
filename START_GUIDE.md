@@ -23,9 +23,12 @@ That's it! The script will handle everything automatically.
    - Verifies Python is ready
 
 3. **Runs Security Scans** 🔍
-   - Scans `ac.lk` domain (all subdomains)
-   - Scans `gov.lk` domain (all subdomains)
+   - Scans `ac.lk` and `gov.lk` **simultaneously** (parallel execution)
+   - Both scans run in the background
    - Generates Excel reports for each
+   - Creates temporary log files during scanning
+   - Waits for both scans to complete
+   - Cleans up logs if both succeed
 
 4. **Pushes Results** 📤
    - Commits both report files
@@ -97,8 +100,19 @@ To save output to a log file:
 - Use SSH keys or credential helper
 
 **Scan takes too long**
-- This is normal for large domains (2-3 hours each)
+- Scans now run in parallel, cutting total time roughly in half
+- ac.lk and gov.lk scan simultaneously
+- Still expect 2-3 hours total (depends on slowest scan)
 - Consider running overnight via cron
+
+**Want to see scan progress**
+- Check the temporary log files while scans are running:
+  ```bash
+  tail -f ac_lk_scan_*.log
+  # or
+  tail -f gov_lk_scan_*.log
+  ```
+- Logs are auto-deleted after successful completion
 
 **Git push fails**
 - Check network connection
@@ -111,3 +125,6 @@ To save output to a log file:
 - Check the generated reports before setting up automation
 - Monitor the first few automated runs
 - Consider adding email notifications on completion/failure
+- Parallel execution reduces total scan time significantly
+- Both scans share the same environment and resources
+- If one scan fails, both logs are preserved for debugging
