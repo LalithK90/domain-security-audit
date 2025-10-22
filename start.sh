@@ -10,7 +10,7 @@ set -e  # Exit on any error
 MAIN_LOG="start_run_$(date '+%Y%m%d_%H%M%S').log"
 if [ -t 1 ]; then
     # Running interactively - redirect to log file
-    exec > >(tee -a "$MAIN_LOG") 2>&1
+    exec >> "$MAIN_LOG" 2>&1
     echo "📝 Logging to: $MAIN_LOG"
 fi
 
