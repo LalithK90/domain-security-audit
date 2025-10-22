@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Automated Security Scanner Runner
 # This script: 1) Pulls latest code, 2) Runs scans, 3) Pushes results to GitHub
@@ -72,7 +72,7 @@ else
         echo -e "${GREEN}✅ Virtual environment created successfully${NC}"
         
         # Activate and install dependencies
-        source "$VENV_DIR/bin/activate"
+        . "$VENV_DIR/bin/activate"
         
         if [ -f "requirements.txt" ]; then
             echo "Installing dependencies from requirements.txt..."
@@ -94,7 +94,7 @@ fi
 
 # Activate the virtual environment
 echo "Activating virtual environment..."
-source "$VENV_DIR/bin/activate"
+. "$VENV_DIR/bin/activate"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Environment activated: $(which python)${NC}"
