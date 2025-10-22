@@ -775,37 +775,42 @@
         let currentFileName = '';
         let viewMode = 'subdomain'; // 'subdomain' | 'coverage' | 'standards' | 'unknown'
         
-        // Upload zone interactions
-        const uploadZone = document.getElementById('uploadZone');
-        const fileInput = document.getElementById('fileInput');
-        
-        uploadZone.addEventListener('click', () => fileInput.click());
-        
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('dragover');
+        // Wait for DOM to load before initializing
+        document.addEventListener('DOMContentLoaded', function() {
+         e            ne();
         });
-        
-        uploadZone.addEventListener('dragleave', () => {
-            uploadZone.classList.remove('dragover');
-        });
-        
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('dragover');
+                     function initial            dZone() {
+                       Upload zone interactio                       const uploadZ                cument.getElementById('                ne');
+            const fi                = document.getElementById('fileInput');
             
-            const file = e.dataTransfer.files[0];
-            if (file) {
-                handleFile(file);
+            if (!uploadZone |n                               console.error('Upload element                und');
+                return;
             }
-        });
-        
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                handleFile(file);
-            }
-        });
+             
+                     ploadZone.addEventListen                k',                         console.log('Clicking  file                                  fileInput.click                        });
+            
+            uploadZone.addEventListen                    ', (e) => {
+                e.preventDefault();
+        a                    ist.add('dragover');
+                                    
+            uploadZone.addEventListener('dr                        {
+                          loL                    dragover');
+            });
+            
+                            ne.addEventListener('drop', (e) => {                         e.preventDefault()                        .                    move('dragover');
+                
+                                      .dataTransfer.files[                            if (file) {
+                    ha                    e);
+                          });
+            
+            fileInput.addEv                        nge', (e) => {
+                console.log('File selected');
+                const file = e.target.files[0];
+                if (file) {
+                    handleFile(file);
+                }
+            });
+        }
         
         function handleFile(file) {
             if (!file.name.match(/\.(xlsx|xls)$/)) {
