@@ -6,13 +6,13 @@
 
 set -e  # Exit on any error
 
-# Redirect all output to log file if not already redirected
+# Create log file name
 MAIN_LOG="start_run_$(date '+%Y%m%d_%H%M%S').log"
-if [ -t 1 ]; then
-    # Running interactively - redirect to log file
-    exec >> "$MAIN_LOG" 2>&1
-    echo "📝 Logging to: $MAIN_LOG"
-fi
+
+# Redirect all output to both screen and log file
+exec > >(tee -a "$MAIN_LOG") 2>&1
+
+echo "📝 Logging to: $MAIN_LOG"
 
 # Colors for output
 RED='\033[0;31m'
