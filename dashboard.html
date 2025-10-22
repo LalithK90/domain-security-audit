@@ -963,26 +963,32 @@
             setupFilterListeners();
         }
         
-        function detectSheetType(data, sh                           if (!data || data.lengt                ur
-                
-            const co                keys(data[0] || {});
-       a                ls = cols.include                ') && cols.includes('Tot                 onst hasCoverage                includes('Control_ID') u                te_%');
-            const                 Cols = cols.includes('St             &n            Score_%');
+        function detectSheetType(data, sheetName) {
+            if (!data || data.length === 0) return 'unknown';
             
-             if (hasS                ) return 'subdomain';
-            if (hasCoverageCm                e Summary/i.test(sheetName)) return 'cove                       if (hasStandardsCols || /Standards Scores/i.test(sheetName)) return 'standards                   return 'unknown';
+            const cols = Object.keys(data[0] || {});
+            const hasSubdomainCols = cols.includes('Subdomain') && cols.includes('Total_Score');
+            const hasCoverageCols = cols.includes('Control_ID') && cols.includes('Pass_Rate_%');
+            const hasStandardsCols = cols.includes('Standard') && cols.includes('Score_%');
+            
+            if (hasSubdomainCols) return 'subdomain';
+            if (hasCoverageCols || /Parameter Coverage Summary/i.test(sheetName)) return 'coverage';
+            if (hasStandardsCols || /Standards Scores/i.test(sheetName)) return 'standards';
+            return 'unknown';
         }
         
         function updateSheetGuide(mode) {
-                   st guide = document.getElementById('sheetGuideContent');
-            const titleg                d('sheetGuideTitle');
+            const guide = document.getElementById('sheetGuideContent');
+            const title = document.getElementById('sheetGuideTitle');
             
-                       e === 'subdomain') {
+            if (mode === 'subdomain') {
                 title.textContent = 'Subdomain Security Results';
-                    guide.innerHTML = `
-                    <p><strong>What you're viewing:</strong                 subdomain securit             ar            /p>
-                    < ul class=                                    <li><strong>Score:</strong> 0-100 based                 curity checks weighted by subdomain type</li>
-            <                ype:</strong> webapp (intera                    i (REST/GraphQL), static (CDN content), other (DNS                                        <li><strong>Risk:</strong> Critical (&lt;40), High (40-60), Medium (60-80), Low (80+) for webapp/api</li>
+                guide.innerHTML = `
+                    <p><strong>What you're viewing:</strong> Individual subdomain security scores and risk ratings.</p>
+                    <ul class="mb-2">
+                        <li><strong>Score:</strong> 0-100 based on 128 security checks weighted by subdomain type</li>
+                        <li><strong>Type:</strong> webapp (interactive sites), api (REST/GraphQL), static (CDN content), other (DNS only)</li>
+                        <li><strong>Risk:</strong> Critical (&lt;40), High (40-60), Medium (60-80), Low (80+) for webapp/api</li>
                     </ul>
                     <p class="mb-0"><em>💡 Use filters to find high-risk subdomains or search for specific ones.</em></p>
                 `;
@@ -992,8 +998,8 @@
                     <p><strong>What you're viewing:</strong> Pass/fail rates for each security control across all subdomains.</p>
                     <ul class="mb-2">
                         <li><strong>Control_ID:</strong> Unique security check identifier (e.g., TLS-1, AUTH-5)</li>
-                              i><strong>Pass_Rate_%:</strong> Pe                    omains that passed this check</li>
-                                   rong>Checked:</strong> How many subdomains were tested for this control</li>
+                        <li><strong>Pass_Rate_%:</strong> Percentage of subdomains that passed this check</li>
+                        <li><strong>Checked:</strong> How many subdomains were tested for this control</li>
                         <li><strong>Priority:</strong> Critical, High, Medium, or Low severity rating</li>
                     </ul>
                     <p class="mb-0"><em>💡 Focus on controls with low pass rates and high priority for maximum security impact.</em></p>
@@ -1004,8 +1010,8 @@
                     <p><strong>What you're viewing:</strong> Aggregate scores for industry standards and compliance frameworks.</p>
                     <ul class="mb-2">
                         <li><strong>Standard:</strong> ISO 27034, NIST SP 800-53, PSD2, HIPAA, PCI-DSS, OWASP Top 10</li>
-                            <li><strong>Score_%:</stro                     rate for all mapped controls in this standard</li>
-                            <li><strong>Controls_Mapped:</strong> Number of security checks relevant to this framework</li>
+                        <li><strong>Score_%:</strong> Pass rate for all mapped controls in this standard</li>
+                        <li><strong>Controls_Mapped:</strong> Number of security checks relevant to this framework</li>
                     </ul>
                     <p class="mb-0"><em>💡 Scores ≥80% indicate strong compliance posture; &lt;60% requires immediate attention.</em></p>
                 `;
@@ -1018,34 +1024,43 @@
         function configureFilterVisibility(mode) {
             const typeGroup = document.getElementById('typeFilterGroup');
             const riskGroup = document.getElementById('riskFilterGroup');
-            const minGroup                getElemen                    roup');
-            const maxGrou                    ElementById('maxScoreGroup');
+            const minGroup = document.getElementById('minScoreGroup');
+            const maxGroup = document.getElementById('maxScoreGroup');
             const searchLabel = document.getElementById('searchLabel');
-                 on            hIo            etElementById('searchInput');
-             
-                if (mode === 'subdomain') {
-                // Show all subdom                                if (typeGroup) typeGroup.style.display = 'bloc                        if (riskGroup) riskGroup.style.display = 'block';
-                    if (minGroup) minGroup.style.display = 'block';
-                        maxGroup) maxGroup.style.display = 'block';
-                                textContent = 'Search Subdomain';
-                searchInpur                .';
-            } else if (m                    e') {
-                // Hide                     s, keep score range
-                if (typeGroup)                    .display = 'none';
-                if (riskGroup)                     display = 'none';
-                if (minGroup)                     isplay = 'block';
-                if (maxGroup)                     isplay = 'block';
-                searchLabel.                    earch Control ID';
-                sear                eholder = 'e.g., TLS-1, AUTH-5...'                    else if (mode === 'standards') {
-                               t filters, keep search
-                if (typeGr                    tyle.display = 'none';
-                if (riskGr                    tyle.display = 'none';
-                if (minGr                    yle.display = 'block';
-                if (maxGr                    yle.display = 'block';
-                searchLa                    = 'Search Standard';
-                searchInput.pla                e.g., ISO, NIST, PCI...';
-                                         // Show basic search o                        if (typeGroup) typeGroup.style.display = 'non                        if (riskGroup) riskGroup.style.display = 'non                        if (minGroup) minGroup.style.display = 'none                       if (maxGroup) maxGroup.style.display = 'none'                      searchLabel.textContent = 'Search';
-                           nput.placeholder = 'Search...';
+            const searchInput = document.getElementById('searchInput');
+            
+            if (mode === 'subdomain') {
+                // Show all subdomain-specific filters
+                if (typeGroup) typeGroup.style.display = 'block';
+                if (riskGroup) riskGroup.style.display = 'block';
+                if (minGroup) minGroup.style.display = 'block';
+                if (maxGroup) maxGroup.style.display = 'block';
+                searchLabel.textContent = 'Search Subdomain';
+                searchInput.placeholder = 'Search...';
+            } else if (mode === 'coverage') {
+                // Hide type/risk filters, keep score range
+                if (typeGroup) typeGroup.style.display = 'none';
+                if (riskGroup) riskGroup.style.display = 'none';
+                if (minGroup) minGroup.style.display = 'block';
+                if (maxGroup) maxGroup.style.display = 'block';
+                searchLabel.textContent = 'Search Control ID';
+                searchInput.placeholder = 'e.g., TLS-1, AUTH-5...';
+            } else if (mode === 'standards') {
+                // Hide type/risk filters, keep search
+                if (typeGroup) typeGroup.style.display = 'none';
+                if (riskGroup) riskGroup.style.display = 'none';
+                if (minGroup) minGroup.style.display = 'block';
+                if (maxGroup) maxGroup.style.display = 'block';
+                searchLabel.textContent = 'Search Standard';
+                searchInput.placeholder = 'e.g., ISO, NIST, PCI...';
+            } else {
+                // Show basic search only
+                if (typeGroup) typeGroup.style.display = 'none';
+                if (riskGroup) riskGroup.style.display = 'none';
+                if (minGroup) minGroup.style.display = 'none';
+                if (maxGroup) maxGroup.style.display = 'none';
+                searchLabel.textContent = 'Search';
+                searchInput.placeholder = 'Search...';
             }
         }
         
