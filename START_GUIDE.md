@@ -2,8 +2,25 @@
 
 ## Quick Start
 
+**Option 1: Run Normally (stay connected)**
 ```bash
-./start.sh
+bash start.sh
+```
+
+**Option 2: Run in Background (safe to disconnect SSH)**
+```bash
+# Start the scan
+nohup bash start.sh &
+
+# Or just run it normally - it will log to file automatically
+bash start.sh
+
+# Then disconnect SSH - scans will continue running!
+```
+
+**Check Status After Reconnecting:**
+```bash
+bash check_status.sh
 ```
 
 That's it! The script will handle everything automatically.
@@ -39,6 +56,61 @@ That's it! The script will handle everything automatically.
 
 - `ac.lk_security_report.xlsx` - Complete security analysis of ac.lk
 - `gov.lk_security_report.xlsx` - Complete security analysis of gov.lk
+- `start_run_YYYYMMDD_HHMMSS.log` - Main execution log
+- `ac_lk_scan_YYYYMMDD_HHMMSS.log` - Detailed ac.lk scan log (temporary)
+- `gov_lk_scan_YYYYMMDD_HHMMSS.log` - Detailed gov.lk scan log (temporary)
+
+## Running Safely Over SSH
+
+The script is **SSH-disconnect safe**! You can start it and disconnect without interrupting the scans.
+
+### How It Works
+
+1. **Automatic Logging** - All output is saved to timestamped log files
+2. **Background Processes** - Scans use `nohup` to survive SSH disconnection
+3. **PID Tracking** - Process IDs are saved for monitoring
+4. **Status Checking** - Use `check_status.sh` to monitor progress anytime
+
+### Workflow
+
+```bash
+# On server: Start the scan
+bash start.sh
+
+# You'll see: "📝 Logging to: start_run_20251022_143000.log"
+# Scans will continue even if you disconnect
+
+# Disconnect SSH (close terminal, network drops, etc.)
+# Scans keep running in the background!
+
+# Later: Reconnect and check status
+bash check_status.sh
+
+# View live progress
+tail -f ac_lk_scan_*.log
+tail -f gov_lk_scan_*.log
+
+# View main log
+tail -f start_run_*.log
+```
+
+### Alternative: Using screen or tmux
+
+If you prefer session management tools:
+
+```bash
+# Using screen
+screen -S security_scan
+bash start.sh
+# Press Ctrl+A then D to detach
+# Reconnect: screen -r security_scan
+
+# Using tmux
+tmux new -s security_scan
+bash start.sh
+# Press Ctrl+B then D to detach
+# Reconnect: tmux attach -t security_scan
+```
 
 ## Scheduling (Optional)
 
@@ -106,13 +178,17 @@ To save output to a log file:
 - Consider running overnight via cron
 
 **Want to see scan progress**
-- Check the temporary log files while scans are running:
+- Use the status checker: `bash check_status.sh`
+- Or check the log files while scans are running:
   ```bash
   tail -f ac_lk_scan_*.log
   # or
   tail -f gov_lk_scan_*.log
+  # or main log
+  tail -f start_run_*.log
   ```
-- Logs are auto-deleted after successful completion
+- Scan logs are auto-deleted after successful completion
+- Main log is always preserved
 
 **Git push fails**
 - Check network connection

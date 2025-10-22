@@ -2,8 +2,17 @@
 
 # Automated Security Scanner Runner
 # This script: 1) Pulls latest code, 2) Runs scans, 3) Pushes results to GitHub
+# Can run safely even after SSH disconnect
 
 set -e  # Exit on any error
+
+# Redirect all output to log file if not already redirected
+MAIN_LOG="start_run_$(date '+%Y%m%d_%H%M%S').log"
+if [ -t 1 ]; then
+    # Running interactively - redirect to log file
+    exec > >(tee -a "$MAIN_LOG") 2>&1
+    echo "📝 Logging to: $MAIN_LOG"
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -131,12 +140,16 @@ GOV_LOG="gov_lk_scan_${FILE_TIMESTAMP}.log"
 
 # Run both scans in background
 echo -e "${BLUE}[ac.lk]${NC}  Scan running in background... (log: $AC_LOG)"
-python security_scanner.py ac.lk --output ac.lk_security_report.xlsx > "$AC_LOG" 2>&1 &
+nohup python security_scanner.py ac.lk --output ac.lk_security_report.xlsx > "$AC_LOG" 2>&1 &
 AC_PID=$!
 
 echo -e "${BLUE}[gov.lk]${NC} Scan running in background... (log: $GOV_LOG)"
-python security_scanner.py gov.lk --output gov.lk_security_report.xlsx > "$GOV_LOG" 2>&1 &
+nohup python security_scanner.py gov.lk --output gov.lk_security_report.xlsx > "$GOV_LOG" 2>&1 &
 GOV_PID=$!
+
+# Save PIDs to file for later monitoring
+echo "$AC_PID" > .ac_lk_scan.pid
+echo "$GOV_PID" > .gov_lk_scan.pid
 
 echo ""
 echo "Background processes started:"
@@ -187,6 +200,9 @@ fi
 
 echo -e "${GREEN}✅ All scans completed successfully!${NC}"
 echo ""
+
+# Clean up PID files
+rm -f .ac_lk_scan.pid .gov_lk_scan.pid
 
 # Clean up log files if scans were successful
 rm -f "$AC_LOG" "$GOV_LOG"
