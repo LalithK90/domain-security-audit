@@ -777,33 +777,39 @@
         
         // Wait for DOM to load before initializing
         document.addEventListener('DOMContentLoaded', function() {
-         e            ne();
+         e                ne();
         });
-                     function initial            dZone() {
-                       Upload zone interactio                       const uploadZ                cument.getElementById('                ne');
-            const fi                = document.getElementById('fileInput');
+        
+        function initial            dZone() {
+                   Upload zone interactio                   const uploadZ            cument.getElementById('            ne');
+            const fi            = document.getElementById('fileInput');
             
-            if (!uploadZone |n                               console.error('Upload element                und');
+            if (!uploadZone |n                           console.error('Upload elements not found');
                 return;
             }
              
                      ploadZone.addEventListen                k',                         console.log('Clicking  file                                  fileInput.click                        });
             
-            uploadZone.addEventListen                    ', (e) => {
+            uploadZone.addEventListener('dragover', (e) => {
                 e.preventDefault();
-        a                    ist.add('dragover');
-                                    
-            uploadZone.addEventListener('dr                        {
-                          loL                    dragover');
+        adZone.classList.add('dragover');
+            });
+                
+            uploadZone.addEventListener('dragleave', () => {
+                uploList.remove('dragover');
             });
             
-                            ne.addEventListener('drop', (e) => {                         e.preventDefault()                        .                    move('dragover');
+            uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+              .classList.remove('dragover');
                 
-                                      .dataTransfer.files[                            if (file) {
-                    ha                    e);
-                          });
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    handleFile(file);
+    }
+            });
             
-            fileInput.addEv                        nge', (e) => {
+            fileInput.addEventListener('change', (e) => {
                 console.log('File selected');
                 const file = e.target.files[0];
                 if (file) {
