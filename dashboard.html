@@ -278,7 +278,8 @@
                             </h4>
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle me-2"></i>
-                                <strong>Context-Aware Scoring:</strong> The scanner evaluates <strong>106 security parameters</strong> across <strong>20 categories</strong>, with different weights based on subdomain type (webapp/api/static/other).
+                                <strong>Context-Aware Scoring:</strong> The scanner evaluates <strong>128 security parameters</strong> across <strong>23
+                                    categories</strong>, with different weights based on subdomain type (webapp/api/static/other).
                             </div>
                             
                             <div class="row mt-4">
@@ -353,7 +354,7 @@
                                             <h2 class="accordion-header">
                                                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#categoryWeights">
                                                     <i class="fas fa-balance-scale me-2"></i>
-                                                    Category Weights (20 Categories, 106 Parameters)
+                                                    Category Weights (23 Categories, 128 Parameters)
                                                 </button>
                                             </h2>
                                             <div id="categoryWeights" class="accordion-collapse collapse" data-bs-parent="#scoringAccordion">
@@ -397,8 +398,8 @@
                                                     </div>
                                                     <p class="text-muted small mt-2">
                                                         <i class="fas fa-lightbulb me-1"></i>
-                                                        <strong>Note:</strong> Bold percentages indicate high-priority categories for that subdomain type. 
-                                                        For example, Authentication is 15% for webapps but only 2% for static sites.
+                                                        <strong>Note:</strong> This table is illustrative. Exact category weights and total parameters may change over time;
+                                                        refer to the report and SCORING_GUIDE.md for the latest mapping.
                                                     </p>
                                                 </div>
                                             </div>
@@ -500,11 +501,11 @@
                                                         <li>FAQ and troubleshooting</li>
                                                     </ul>
                                                     <p>
-                                                        <strong>See:</strong> 
-                                                        <code>SCORING_GUIDE.md</code> in the project repository
+                                                        <strong>See:</strong>
+                                                        <code>SCORING_GUIDE.md</code> in this repository for up-to-date categories, weights, and parameters.
                                                     </p>
                                                     <p class="mb-0">
-                                                        <a href="https://github.com/LalithK90/ac-lk-network-audit/blob/master/SCORING_GUIDE.md" target="_blank" class="btn btn-primary btn-sm">
+                                                        <a href="SCORING_GUIDE.md" target="_blank" class="btn btn-primary btn-sm">
                                                             <i class="fas fa-external-link-alt me-2"></i>
                                                             View Full Documentation
                                                         </a>
@@ -761,6 +762,7 @@
         let allSheets = [];
         let currentSheet = '';
         let currentFileName = '';
+        let viewMode = 'subdomain'; // 'subdomain' | 'coverage' | 'standards'
         
         // Upload zone interactions
         const uploadZone = document.getElementById('uploadZone');
@@ -922,20 +924,60 @@
             
             currentData = jsonData;
             
-            // Populate type filter
-            populateTypeFilter(jsonData);
+            // Detect view mode based on columns or            viewMode = detectSheetType(jsonData, sheetName);
+            configureStatCards(viewMode);
             
-            // Update statistics
-            updateStatistics(jsonData);
-            
-            // Create charts
-            createCharts(jsonData);
-            
-            // Create table
-            createTable(jsonData);
-            
-            // Setup filter listeners
-            setupFilterListeners();
+            if (viewMode === 'subdomain') {
+                // Populate type filter
+                populateTypeFilter(jsonData);
+                // Update statistics and visuals for subdomains
+            atistics(jsonData, 'subdomain');
+    createCharts(jsonData, 'subdomain');
+                createTable(jsonData, 'subdomain');
+                setupFilterListeners();
+            } else if (viewMode === 'c                // Clear type filter contents
+                document.getElementById('typeFilter').innerHTML = '<option value="">All Types</option>';
+                updateStatistics(jsonData, 'coverage');
+                createCharts(jsonData, 'coverage');
+                createTable(jsonData, 'coverage');
+            } else if (viewMode === 'standards') {
+                document.getElementById('typeFilter').innerHTML = '<option value="">All Types</option>';
+                updateStatistics(jsonData, 'standards');
+                createCharts(jsonData, 'standards');
+                createTable(jsonData, 'standards');
+            } else {
+                // Fallback to raw table view
+                updateStatistics([], 'unknown');
+                createCharts([], 'unknown');
+                createTable(jsonData, 'unknown');
+            }
+        }
+
+        function detectSheetType(data, sheetName)                    onst cols = Object.keys(data[0] || {});
+                      hasSubdomainCols = cols.includes('Su                    s.includes('Total_Score');
+                         CoverageC                    des('Control_ID') && cols.incl                    %');
+            const hasStandar                    cludes('Standard') && cols.in                    );
+            if (hasSubdomainCol                ub            
+                if (hasCoverageCols ||  /Parameter Coverage                est(sheetName)) return 'coverage';
+                      sStandardsCols || /Standards Scores/i.test(sheetName)) return 'standards';
+                          known';
+        }
+
+        function configureStatCards(mode) {
+            const labe                           subdomain: ['Total Subdomains', 'Active Subdomains', 'Average Score',                ],
+                coverage: ['Total Contr                ed Controls', 'Avg Pass Rate', 'High-Risk Controls'],
+                standards: ['Total                 '≥80% Standards', 'Average Score', 'High-Risk Standards'],
+                unknow                ows', '', '', '']
+                            || ['Total Rows', '', '',  ''];
+                    t ids = ['totalSu                    veSubdomains', 'avgScore', 'highRisk'];
+            const elements = document.getEle                    ('stat-label');
+            // Update four labels in order
+            let idx = 0;
+                         t el of elements) {
+                if (idx < 4) el.textContent = labels[idx] || '';
+                         ;
+            }
+            // Reset                        ids.forEach(id => document.getE                d).textContent = '0');
         }
         
         function populateTypeFilter(data) {
@@ -1013,30 +1055,54 @@
             applyFilters();
         }
         
-        function updateStatistics(data) {
-            const total = data.length;
-            const active = data.filter(row => row.Scan_Success === true || row.Scan_Success === 'TRUE' || row.Scan_Success === 'True').length;
-            
-            let totalScore = 0;
-            let highRisk = 0;
-            let scoreCount = 0;
-            
-            data.forEach(row => {
-                const score = parseFloat(row.Total_Score || 0);
-                if (!isNaN(score)) {
-                    totalScore += score;
-                    scoreCount++;
-                    if (score < 50) highRisk++;
-                }
-            });
-            
-            const avgScore = scoreCount > 0 ? (totalScore / scoreCount).toFixed(1) : 0;
-            
-            // Animate numbers
-            animateValue('totalSubdomains', 0, total, 1000);
-            animateValue('activeSubdomains', 0, active, 1000);
-            animateValue('avgScore', 0, avgScore, 1000, '%');
-            animateValue('highRisk', 0, highRisk, 1000);
+        function updateStatistics(data,             su)                   if (mode === ' subdo                             const total = data.length;
+                const active = data.filter(row => row.Scan_Success === true || row.Scan_Success === 'TRUE' || row.Scan_Success === 'True' || row.Scan_Success === 'Yes').length;
+                let totalScore = 0;
+                let highRisk = 0;
+                let scoreCount = 0;
+                      t                    h(row => {
+                     const score = parseFloa                        Score || 0);
+                                           score)) {
+                                             e += score;
+                        scoreCount++;
+                        if (score < 50) highRisk++;
+                    }
+                });
+                const avgScore = scoreCount > 0 ? (totalScore / scoreCount).toFixed(1) : 0;
+                animateValue('totalSubdomains', 0, total, 1000);
+                animateValue('activeSubdomains', 0, active, 1000);
+                animateValue('avgScore', 0, avgScore, 1000, '%');
+                animateValue('highRisk', 0, highRisk, 1000);
+                return;
+            }
+            if (mode === 'coverage') {
+                const total = data.length;
+                const checkedControls = data.filter(r => (parseInt(r.Checked || 0, 10)) > 0).length;
+                const avgPass = data.length > 0 ? (data.reduce((s, r) => s + (parseFloat(r['Pass_Rate_%'] || 0)), 0) / data.length).toFixed(1) : 0;
+                const highRiskCtrls = data.filter(r => (parseFloat(r['Pass_Rate_%'] || 0)) < 50).length;
+                animateValue('totalSubdomains', 0, total, 1000);
+                animateValue('activeSubdomains', 0, checkedControls, 1000);
+                animateValue('avgScore', 0, avgPass, 1000, '%');
+                animateValue('highRisk', 0, highRiskCtr ls, 1000);
+                return;
+            }
+            if (mode === 'standards') {
+                const total = data.length;
+                const scores = data.map(r => parseFloat(r['Score_%'] || 0)).filter(v => !isNaN(v));
+                const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
+                const highRiskStd = scores.filter(v => v < 60).length;
+                const goodStd = scores.filter(v => v >= 80).length;
+                animateValue('totalSubdomains', 0, total, 1000);
+                animateValue('activeSubdomains', 0, goodStd, 1000);
+                 animateValue('avgScore', 0, avg, 1000, '%');
+                animateValue('highRisk', 0, highRiskStd, 1000);
+                return;
+            }
+            // unknown
+            animateValue('totalSubdomains', 0, data.length, 1000);
+            animateValue('activeSubdomains', 0, 0, 1000);
+            animateValue('avgScore', 0, 0, 1000, '%');
+            animateValue('highRisk', 0, 0, 1000);
         }
         
         function animateValue(id, start, end, duration, suffix = '') {
@@ -1055,139 +1121,140 @@
             }, 16);
         }
         
-        function createCharts(data) {
+        function createCharts(data, mode = 'subdomain') {
             // Destroy existing charts
             for (const chart in charts) {
                 if (charts[chart]) {
                     charts[chart].destroy();
                 }
             }
-            
-            // Score Distribution Chart
-            const scoreBins = {
-                'Critical (0-25)': 0,
-                'High (26-50)': 0,
-                'Medium (51-75)': 0,
-                'Good (76-90)': 0,
-                'Excellent (91-100)': 0
-            };
-            
-            data.forEach(row => {
-                const score = parseFloat(row.Total_Score || 0);
-                if (score <= 25) scoreBins['Critical (0-25)']++;
-                else if (score <= 50) scoreBins['High (26-50)']++;
-                else if (score <= 75) scoreBins['Medium (51-75)']++;
-                else if (score <= 90) scoreBins['Good (76-90)']++;
-                else scoreBins['Excellent (91-100)']++;
-            });
-            
-            const scoreCtx = document.getElementById('scoreDistChart').getContext('2d');
-            charts.scoreChart = new Chart(scoreCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: Object.keys(scoreBins),
-                    datasets: [{
-                        data: Object.values(scoreBins),
-                        backgroundColor: [
-                            'rgba(220, 53, 69, 0.8)',
-                            'rgba(255, 193, 7, 0.8)',
-                            'rgba(13, 202, 240, 0.8)',
-                            'rgba(13, 110, 253, 0.8)',
-                            'rgba(25, 135, 84, 0.8)'
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { padding: 15, font: { size: 11 } }
-                        }
+            if (mode === 'subdomain') {
+                // Score Distribution Chart
+                const scoreBins = {
+                    'Critical (0-25)': 0,
+                             Hi0                                   'M edium (51-75)': 0,
+                              ood (76-90)': 0,
+                              xcellent (91-100)': 0
+                };
+                data.forEach(row => {
+                    const score = parseFloat(row.Total_Score || 0);
+                    if (score <= 25) scoreBins['Critical (0-25)']++;
+                    else if (score <= 50) scoreBins['High (26-50)']++;
+                    else if (score <= 75) scoreBins['Medium (51-75)']++;
+                    else if (score <= 90) scoreBins['Good (76-90)']++;
+                    else scoreBins['Excellent (91-100)']++;
+                });
+                const scoreCtx = document.getElementById('scoreDistChart').getContext('2d');
+                charts.scoreChart = new Chart(scoreCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(scoreBins),
+                        datasets: [{
+                            data: Object.values(scoreBins),
+                            backgroundColor: [
+                                'rgba(220, 53, 69, 0.8)',
+                                'rgba(255, 193, 7, 0.8)',
+                                'rgba(13, 202, 240, 0.8)',
+                                'rgba(13, 110, 253, 0.8)',
+                                'rgba(25, 135, 84, 0.8)'
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 11 } } } }
                     }
+                });
+
+                // Type Comparison Chart
+                const typeScores = {};
+                const typeCounts = {};
+                data.forEach(row => {
+                    const type = row.Type || 'other';
+                    const score = parseFloat(row.Total_Score || 0);
+                    if (!typeScores[type]) { typeScores[type] = 0; typeCounts[type] = 0; }
+                    typeScores[type] += score;
+                    typeCounts[type]++;
+                });
+                const typeAvgs = {};
+                for (const type in typeScores) {
+                    typeAvgs[type] = (typeScores[type] / typeCounts[type]).toFixed(2);
                 }
-            });
-            
-            // Type Comparison Chart
-            const typeScores = {};
-            const typeCounts = {};
-            
-            data.forEach(row => {
-                const type = row.Type || 'other';
-                const score = parseFloat(row.Total_Score || 0);
-                
-                if (!typeScores[type]) {
-                    typeScores[type] = 0;
-                    typeCounts[type] = 0;
-                }
-                typeScores[type] += score;
-                typeCounts[type]++;
-            });
-            
-            const typeAvgs = {};
-            for (const type in typeScores) {
-                typeAvgs[type] = (typeScores[type] / typeCounts[type]).toFixed(2);
+                const typeCtx = document.getElementById('typeChart').getContext('2d');
+                charts.typeChart = new Chart(typeCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(typeAvgs),
+                        datasets: [{
+                            label: 'Average Score',
+                            data: Object.values(typeAvgs),
+                            backgroundColor: [
+                                'rgba(13, 110, 253, 0.7)',
+                                'rgba(25, 135, 84, 0.7)',
+                                'rgba(255, 193, 7, 0.7)',
+                                'rgba(220, 53, 69, 0.7)',
+                                'rgba(108, 117, 125, 0.7)'
+                            ]
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
+                });
+
+                // Vulnerabilities Chart (from _Pass columns)
+                const vulnData = getTopVulnerabilities(data);
+                const vulnCtx = document.getElementById('vulnChart').getContext('2d');
+                charts.vulnChart = new Chart(vulnCtx, {
+                    type: 'bar',
+                    data: { labels: vulnData.labels, datasets: [{ label: 'Failure Rate (%)', data: vulnData.data, backgroundColor: 'rgba(220, 53, 69, 0.7)', borderColor: 'rgba(220, 53, 69, 1)', borderWidth: 1 }] },
+                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } }
+                });
+                return;
             }
-            
-            const typeCtx = document.getElementById('typeChart').getContext('2d');
-            charts.typeChart = new Chart(typeCtx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(typeAvgs),
-                    datasets: [{
-                        label: 'Average Score',
-                        data: Object.values(typeAvgs),
-                        backgroundColor: [
-                            'rgba(13, 110, 253, 0.7)',
-                            'rgba(25, 135, 84, 0.7)',
-                            'rgba(255, 193, 7, 0.7)',
-                            'rgba(220, 53, 69, 0.7)',
-                            'rgba(108, 117, 125, 0.7)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, max: 100 }
-                    },
-                    plugins: {
-                        legend: { display: false }
-                    }
-                }
-            });
-            
-            // Vulnerabilities Chart
-            const vulnData = getTopVulnerabilities(data);
-            const vulnCtx = document.getElementById('vulnChart').getContext('2d');
-            charts.vulnChart = new Chart(vulnCtx, {
-                type: 'bar',
-                data: {
-                    labels: vulnData.labels,
-                    datasets: [{
-                        label: 'Failure Rate (%)',
-                        data: vulnData.data,
-                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        borderColor: 'rgba(220, 53, 69, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { beginAtZero: true, max: 100 }
-                    },
-                    plugins: {
-                        legend: { display: false }
-                    }
-                }
-            });
+
+            if (mode === 'coverage') {
+                // Chart 1: Distribution of Pass Rate buckets
+                const buckets = { '0-20%': 0, '21-40%': 0, '41-60%': 0, '61-80%': 0, '81-100%': 0 };
+                data.forEach(r => {
+                    const pr = parseFloat(r['Pass_Rate_%'] || 0);
+                    if (pr <= 20) buckets['0-20%']++; else if (pr <= 40) buckets['21-40%']++; else if (pr <= 60) buckets['41-60%']++; else if (pr <= 80) buckets['61-80%']++; else buckets['81-100%']++;
+                });
+                const scoreCtx = document.getElementById('scoreDistChart').getContext('2d');
+                charts.scoreChart = new Chart(scoreCtx, { type: 'doughnut', data: { labels: Object.keys( buckets), datasets: [{ data: Object.values(buckets), backgroundColor: ['#dc3545cc','#ffc107cc','#0dcaf0cc','#0d6efdcc','#198754cc'], borderColor: '#fff', borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+
+                // Chart 2: Top 10 Failed Controls by failure rate
+                const sorted = [...data].sort((a,b) => (parseFloat(b.Failed||0)/(parseFloat(b.Checked||0)||1)) - (parseFloat(a.Failed||0)/(parseFloat(a.Checked||0)||1))).slice(0,10 );
+                 const  typeCtx = d ocument.getElementById('typeChart').getContext('2d');
+                charts.typeChart = new Chart(typeCtx, { type: 'bar', data: { labels: sorted.map(r => r.Control_ID), datasets: [{ label: 'Failure Rate (Failed/Checked)', data: sorted.map(r => Math.round(((parseFloat(r.Failed||0 ))/((parseFloat(r.Checked| |0 )) | |1))*100)), backgroun dC ol or : 'rgba(220,53,69,0.7)' }]  } ,  o ptions: { responsive:  t ru e,  maintainAspe ctRatio: false, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } } });
+
+                // Chart 3: Top 10 Most Checked controls
+                const mostChecked = [...data].sort((a,b) => (parseInt(b.Checked||0,10)) - (parseInt(a.Checked||0,10))).slice(0,10);
+                 c ons t  vulnCtx = document.ge tE lem en tBy I d('vulnChart').getContext('2d');
+                charts.vulnChart = new Chart(vulnCtx, { type: 'bar', data: { labels: mostChecked.map(r => r.Control_ID), datasets: [{ label: 'Checked (count)', data: mostChecked.map(r => parseInt(r.Checked||0,10)), backgroundColor: 'rgba(13,110,253,0.7)' }] }, options: { indexAxis:  'y', responsive: true, m ai nt ainAspectRatio: false, plu gi ns : { legend: {  display: false } } } });
+                return;
+            }
+
+            if (mode === 'standards') {
+                // Chart 1: Standards Scores
+                const labels = data.map(r => r.Standard);
+                const scores = data.map(r => parseFloat(r['Score_%'] || 0));
+                   const scoreCtx = document.getElementById('scoreDistChart').getContext('2d');
+                charts.scoreChart = new Chart(scoreCtx, { type: 'bar', data: { labels, datasets: [{ label: 'Score (%)', data: scores, backgroundColor: 'rgba(25,135,84,0.7)' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } } }) ;
+
+                // Chart 2: Controls Mapped per Standard
+                const typeCtx = document.getElementById('typeChart').getContext('2d');
+                charts.typeChart = new Chart(typeCtx, { type: 'bar', data: { labels, datasets: [{ label: 'Controls Mapped', data: data.map(r => parseInt(r.Controls_Mapped||0,10)), backgroundColor: 'rgba(13,110,253,0.7)' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+
+                // Chart 3: Score Distribution snapshot
+                const buckets = { '<60%':0, '60-79%':0, '80-89%':0, '90-100%':0 };
+                scores.forEach(s => { if (s < 60) buckets['<60%']++; else if (s < 80) buckets['60-79%']++; else if (s < 90) buckets['80-89%']++; els e  bu ckets['90-100%']++; });
+                const vulnCtx = document.getElementById('vulnChart').getContext('2d');
+                charts.vulnChart = new Chart(vulnCtx, { type: 'doughnut', data: { labels: Object.keys(buckets), datasets: [{ data: Object.valu es(buckets),  backgroundC olor: ['#dc35 45cc','#ffc107cc','#0d6efdcc','#198754cc'], borderColor: '#fff', borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false } });
+                return;
+            }
+            // unknown mode: render empty charts
         }
         
         function getTopVulnerabilities(data) {
@@ -1230,89 +1297,79 @@
             };
         }
         
-        function createTable(data) {
-            const tableData = data.map((row, index) => {
-                const score = parseFloat(row.Total_Score || 0);
-                let riskLevel = 'Minimal';
-                let riskClass = 'success';
-                
-                if (score < 25) { riskLevel = 'Critical'; riskClass = 'danger'; }
-                else if (score < 50) { riskLevel = 'High'; riskClass = 'warning'; }
-                else if (score < 75) { riskLevel = 'Medium'; riskClass = 'info'; }
-                else if (score < 90) { riskLevel = 'Low'; riskClass = 'primary'; }
-                
-                return {
+        function createTable(data, mode = 'subdomain') {
+                       aTT                (); }
+                        eData = [];
+            let columns = [];
+                         hPlaceholder = 'Search...';
+            if (mode ===                                    d                , index)                              const score = parseFlo                    re || 0);
+                    let riskLe                al'                           iskClass = 'success' ;
+                    if (sco                            iskLevel = 'Critical'; riskClass = 'dang                                           else                             50) { riskLevel =                             Class = 'warning'; }
+                                            (score < 75) { riskLevel = '                                ss = 'info'; }
+                    else                                    iskLevel = 'Low'; riskClass = 'primary'; }
+                    return { index: index + 1, subdomain: row.Subdomain || '', type: row.Type || 'other', score, riskLevel, riskClass, rawData: row };
+                });
+                columns = [
+                    { data: 'index' },
+                    { data: 'subdomain', render: function(data){ return `<a href="https://${data}" target="_blank" class="text-decoration-none"><i class=\"fas fa-external-link-alt me-1 small\"></i>${data}</a>`; }},
+                    { data: 'type', render: function(data){ const badges = { 'webapp':'primary','api':'success','static':'info','website':'warning','other':'secondary' }; return `<span class="badge bg-${badges[data] || 'secondary'}">${data}</span>`; }},
+                    { data: 'score' , rend er: function(data){ let color='danger'; if (data>=90) color='success'; else if (data>=75) color='primary'; else if (data>=50) color='warning'; return  `<div class="progress" style="height: 25px;"><div clas s="pro gress-bar bg-${color} progre ss-bar-ani mated"  style="wi dth: ${da ta}%">< strong>${d ata.toFixe d(1)}%</ strong></div></div>`; }},
+                    { data: 'riskLevel', render: function(data, type,  row){ return `<span class="badge bg-${row.riskClass}">$ {data} </span>`; } } 
+                ] ;
+                   searchPlaceholder  =  'Search s u bdomains...';
+              } else if   (mode === 'coverage') {
+                tableData = data.map((row, index) => ({
                     index: index + 1,
-                    subdomain: row.Subdomain || '',
-                    type: row.Type || 'other',
-                    score: score,
-                    riskLevel: riskLevel,
-                    riskClass: riskClass,
+                    control: row.Control_ID,
+                    priority: row.Pr iority,
+                    description: row.Description,
+                      checked: parseInt(row.Checked || 0, 10),
+                    passed : parseInt(row.Passed || 0, 10),
+                    failed: parseInt(row.Failed || 0, 10),
+                    passRate: parseFloat(row['Pass_Rate_%'] || 0),
                     rawData: row
-                };
-            });
-            
-            if (dataTable) {
-                dataTable.destroy();
+                }));
+                columns = [
+                    { data: 'index' },
+                    { data: 'control' },
+                    { data: 'priority' },
+                    { data: 'description' },
+                    { data: 'checked' },
+                    { data: 'passed' },
+                    { data: 'failed' },
+                    { data: 'passRate', render : (d)=> `${d.toFixed(1)}%` }
+                ];
+                searchPlaceholder = 'Search controls...';
+            } else if (mode === 'standards') {
+                tableData = data.map((row, index) => ({ index: index + 1, standard: row.Standard, mapped: parseInt(row.Controls_Mapped || 0, 10), score: parseFloat(row['Score_%'] || 0), rawData: row }));
+                columns = [
+                    { data: 'index' },
+                     { data: 'standard' },
+                    { data: 'mapped' },
+                    { data: 'score', render: (d)=> `${d.toFixed(1)}%` }
+                ];
+                searchPlaceholder = 'Search standards...';
+            } else {
+                // Unknown: generic table of raw keys
+                const keys =  Object.keys(data[0] || {});
+                tableData = data.map((row, index) => ({ index: index + 1, ...row }));
+                columns = [{ data: 'index' }, ...keys.map(k => ({ data: k }))];
             }
-            
+
             dataTable = $('#subdomainsTable').DataTable({
                 data: tableData,
-                columns: [
-                    { data: 'index' },
-                    {
-                        data: 'subdomain',
-                        render: function(data) {
-                            return `<a href="https://${data}" target="_blank" class="text-decoration-none">
-                                <i class="fas fa-external-link-alt me-1 small"></i>${data}</a>`;
-                        }
-                    },
-                    {
-                        data: 'type',
-                        render: function(data) {
-                            const badges = {
-                                'webapp': 'primary', 'api': 'success', 'static': 'info',
-                                'website': 'warning', 'other': 'secondary'
-                            };
-                            return `<span class="badge bg-${badges[data] || 'secondary'}">${data}</span>`;
-                        }
-                    },
-                    {
-                        data: 'score',
-                        render: function(data) {
-                            let color = 'danger';
-                            if (data >= 90) color = 'success';
-                            else if (data >= 75) color = 'primary';
-                            else if (data >= 50) color = 'warning';
-                            
-                            return `<div class="progress" style="height: 25px;">
-                                <div class="progress-bar bg-${color} progress-bar-animated" style="width: ${data}%">
-                                    <strong>${data.toFixed(1)}%</strong>
-                                </div></div>`;
-                        }
-                    },
-                    {
-                        data: 'riskLevel',
-                        render: function(data, type, row) {
-                            return `<span class="badge bg-${row.riskClass}">${data}</span>`;
-                        }
-                    }
-                ],
+                columns: columns,
                 pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-                order: [[3, 'asc']],
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+                order: [[0, 'asc']],
                 dom: 'Bfrtip',
                 buttons: [
                     { extend: 'excel', text: '<i class="fas fa-file-excel me-1"></i> Excel', className: 'btn btn-success btn-sm' },
                     { extend: 'csv', text: '<i class="fas fa-file-csv me-1"></i> CSV', className: 'btn btn-info btn-sm' },
                     { extend: 'print', text: '<i class="fas fa-print me-1"></i> Print', className: 'btn btn-secondary btn-sm' }
                 ],
-                language: {
-                    search: "_INPUT_",
-                    searchPlaceholder: "Search subdomains..."
-                }
+                language: { search: '_INPUT_', searchPlaceholder: searchPlaceholder }
             });
-            
             document.getElementById('tableCount').textContent = tableData.length;
         }
         
