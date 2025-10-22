@@ -605,7 +605,7 @@ def classify_subdomain(subdomain):
     
     Classification logic:
     - 'api': JSON content, /api/ in URL, or Swagger/OpenAPI docs → 75+ checks
-    - 'webapp': Has <form> tags, login/password fields → ALL 106 checks
+    - 'webapp': Has <form> tags, login/password fields → full webapp checks
     - 'static': HTML without forms or authentication → 70+ checks
     - 'other': DNS-only or non-HTTP services → 9 DNS checks only
     
@@ -694,163 +694,280 @@ TYPE_CHECKS = {
 
 CHECKS = {
     # TLS & Certificate Security
-    'TLS-1': {'priority': 'High', 'desc': 'TLS 1.2+ enforced'},
-    'CERT-1': {'priority': 'High', 'desc': 'Valid cert chain'},
-    'FS-1': {'priority': 'Medium', 'desc': 'Forward secrecy (ECDHE ciphers)'},
-    'WC-1': {'priority': 'Medium', 'desc': 'No weak ciphers (RC4/3DES)'},
-    'TLS-2': {'priority': 'Medium', 'desc': 'OCSP stapling enabled'},
-    'CERT-2': {'priority': 'Medium', 'desc': 'Certificate transparency compliance'},
-    'HSTS-2': {'priority': 'High', 'desc': 'HSTS preload directive enabled'},
-    # HTTP Headers & Protocols
-    'HTTPS-1': {'priority': 'High', 'desc': 'HTTPS enforced (HTTP → HTTPS redirect)'},
-    'HSTS-1': {'priority': 'High', 'desc': 'HSTS max-age ≥31536000 + includeSubDomains'},
-    'CSP-1': {'priority': 'Medium', 'desc': 'CSP present (non-empty)'},
-    'XFO-1': {'priority': 'Medium', 'desc': 'X-Frame-Options: DENY/SAMEORIGIN'},
-    'XCTO-1': {'priority': 'Medium', 'desc': 'X-Content-Type-Options: nosniff'},
-    'XXP-1': {'priority': 'Medium', 'desc': 'X-XSS-Protection: 1; mode=block'},
-    'RP-1': {'priority': 'Medium', 'desc': 'Referrer-Policy: strict-origin-when-cross-origin or stricter'},
-    'PP-1': {'priority': 'Medium', 'desc': 'Permissions-Policy present (non-empty)'},
-    'HEADER-1': {'priority': 'Low', 'desc': 'Clear-Site-Data header present'},
-    'HEADER-2': {'priority': 'Medium', 'desc': 'Cross-Origin-Opener-Policy: same-origin'},
-    'HEADER-3': {'priority': 'Medium', 'desc': 'Cross-Origin-Embedder-Policy: require-corp'},
-    'CORS-1': {'priority': 'Medium', 'desc': 'Restrictive CORS (Access-Control-Allow-Origin ≠ "*")'},
-    'WAF-1': {'priority': 'Medium', 'desc': 'WAF presence (e.g., X-WAF/Cloudflare headers)'},
-    'REPORT-1': {'priority': 'Low', 'desc': 'Report-To header for security reports'},
-    'HEADER-5': {'priority': 'Medium', 'desc': 'Cross-Origin-Resource-Policy: same-site'},
-    'HEADER-6': {'priority': 'Low', 'desc': 'Remove Server/X-Powered-By headers'},
-    # Authentication & Session Management
-    'COO-1': {'priority': 'Low', 'desc': 'Cookies Secure/HttpOnly'},
-    'AUTH-1': {'priority': 'High', 'desc': 'Session timeout ≤30 minutes'},
-    'AUTH-2': {'priority': 'High', 'desc': 'CSRF tokens on state-changing operations'},
-    'AUTH-3': {'priority': 'Medium', 'desc': 'No autocomplete on password fields'},
-    'SESSION-1': {'priority': 'Medium', 'desc': 'Session cookie regenerated on login'},
-    'SAMESITE-1': {'priority': 'Medium', 'desc': 'Cookies with SameSite=Lax/Strict'},
-    'AUTH-4': {'priority': 'High', 'desc': 'Multi-Factor Authentication (MFA) for privileged accounts'},
-    'AUTH-5': {'priority': 'High', 'desc': 'Account lockout/exponential backoff on failed logins'},
-    'AUTH-6': {'priority': 'Medium', 'desc': 'No username enumeration in login errors'},
-    'AUTH-7': {'priority': 'Medium', 'desc': 'Password policy: complexity, rotation, or passkey support'},
-    # Input Validation & Sanitization
-    'INPUT-1': {'priority': 'High', 'desc': 'SQL injection protection'},
-    'INPUT-2': {'priority': 'High', 'desc': 'XSS protection (reflects user input safely)'},
-    'INPUT-3': {'priority': 'Medium', 'desc': 'File upload restrictions'},
-    'INPUT-4': {'priority': 'Medium', 'desc': 'Path traversal prevention'},
-    'INPUT-5': {'priority': 'High', 'desc': 'OS/Command injection protection'},
-    'INPUT-6': {'priority': 'High', 'desc': 'LDAP/NoSQL/Template injection protection'},
-    'INPUT-7': {'priority': 'High', 'desc': 'SSRF protection'},
-    'INPUT-8': {'priority': 'Medium', 'desc': 'File upload malware scanning and execution prevention'},
-    'INPUT-9': {'priority': 'Medium', 'desc': 'Deserialization security'},
-    # Access Control & Authorization
-    'AUTHZ-1': {'priority': 'High', 'desc': 'Access control (vertical privilege escalation)'},
-    'AUTHZ-2': {'priority': 'High', 'desc': 'IDOR protection'},
-    'AUTHZ-3': {'priority': 'High', 'desc': 'Least privilege and RBAC enforcement'},
-    'AUTHZ-4': {'priority': 'High', 'desc': 'Authorization checks on every request'},
-    'AUTHZ-5': {'priority': 'High', 'desc': 'IDOR and privilege escalation testing'},
-    'AUTHZ-6': {'priority': 'Medium', 'desc': 'Business logic flaw testing'},
-    # Security Headers & Browser Policies
-    'HEADER-7': {'priority': 'Medium', 'desc': 'Strict CSP (no unsafe-inline/unsafe-eval, all resource types)'},
-    # Encryption & Data Protection
-    'ENCRYPT-1': {'priority': 'High', 'desc': 'Encryption at rest for sensitive data'},
-    'ENCRYPT-2': {'priority': 'Medium', 'desc': 'Secure key management (no hard-coded keys)'},
-    # Logging, Monitoring & Incident Response
-    'LOG-1': {'priority': 'Low', 'desc': 'Security logging presence'},
-    'LOG-2': {'priority': 'High', 'desc': 'Comprehensive logging (auth, data access, admin actions)'},
-    'LOG-3': {'priority': 'Medium', 'desc': 'Intrusion detection and anomaly monitoring'},
-    'LOG-4': {'priority': 'Medium', 'desc': 'Error handling (no stack traces exposed, logs sanitized)'},
-    # Cloud & Infrastructure Security
-    'CLOUD-1': {'priority': 'High', 'desc': 'Secure IAM roles and least privilege'},
-    'CLOUD-2': {'priority': 'Medium', 'desc': 'Private subnets for databases, encrypted storage'},
-    'CLOUD-3': {'priority': 'Medium', 'desc': 'Container/VM security (non-root, patched, scanned)'},
-    # Email & DNS Security
-    'DNS-1': {'priority': 'Low', 'desc': 'DNSSEC (DS records)'},
-    'SPF-1': {'priority': 'Low', 'desc': 'SPF TXT record'},
-    'DMARC-1': {'priority': 'Low', 'desc': 'DMARC TXT record exists'},
-    'DNS-2': {'priority': 'Low', 'desc': 'CAA record present'},
-    'MX-1': {'priority': 'Low', 'desc': 'MX record configuration'},
-    'DNS-3': {'priority': 'Medium', 'desc': 'DKIM signing enabled'},
-    'DNS-4': {'priority': 'Medium', 'desc': 'DMARC policy set to p=quarantine/reject'},
-    # File & Directory Security
-    'DIR-1': {'priority': 'Medium', 'desc': 'No directory listing'},
-    'ADMIN-1': {'priority': 'Medium', 'desc': 'No exposed common admin paths'},
-    'ROBOTS-1': {'priority': 'Low', 'desc': '/robots.txt does not expose sensitive paths'},
-    'SEC-1': {'priority': 'Low', 'desc': '/.well-known/security.txt exists'},
-    'BACKUP-1': {'priority': 'Medium', 'desc': 'No backup files exposed (.bak, .old, .tmp)'},
-    'GIT-1': {'priority': 'High', 'desc': 'No .git directory exposed'},
-    'CONFIG-1': {'priority': 'High', 'desc': 'No config files exposed (.env, config.json)'},
-    # Information Disclosure
-    'SI-1': {'priority': 'Low', 'desc': 'No server info leakage'},
-    'TITLE-1': {'priority': 'Low', 'desc': 'Page title not default'},
-    'ETag-1': {'priority': 'Low', 'desc': 'ETag not timestamp-based'},
-    'ERROR-1': {'priority': 'Medium', 'desc': 'No stack traces in error pages'},
-    'HEADER-4': {'priority': 'Low', 'desc': 'No version disclosure in headers'},
-    'ERROR-2': {'priority': 'Medium', 'desc': 'Custom error pages (no verbose details)'},
-    # Performance & Cache Security
-    'Cache-1': {'priority': 'Low', 'desc': 'Cache-Control: no-store on root'},
-    'CACHE-2': {'priority': 'Low', 'desc': 'No cache on sensitive pages'},
-    # Redirect & Navigation Security
+    'TLS-1':  {'priority': 'High',   'desc': 'TLS 1.2+ enforced'},
+    'TLS-2':  {'priority': 'Medium', 'desc': 'OCSP stapling enabled'},
+    'TLS-3':  {'priority': 'Low',    'desc': 'TLS_FALLBACK_SCSV support (anti-POODLE)'},
+    'TLS-4':  {'priority': 'Low',    'desc': 'ALPN negotiated (HTTP/2 or HTTP/3 advert)'},
+    'TLS-5':  {'priority': 'Low',    'desc': 'Extended Master Secret (EMS) extension'},
+    'TLS-6':  {'priority': 'Low',    'desc': 'Renegotiation: secure-renegotiation extension'},
+    'CERT-1': {'priority': 'High',   'desc': 'Valid cert chain'},
+    'CERT-2': {'priority': 'Medium', 'desc': 'Certificate transparency (SCT)'},
+    'CERT-3': {'priority': 'Low',    'desc': 'Certificate public key ≥ 2048-bit RSA or ≥ 256-bit EC'},
+    'CERT-4': {'priority': 'Low',    'desc': 'Certificate signature algorithm ≠ SHA-1/MD5'},
+    'CERT-5': {'priority': 'Low',    'desc': 'Host-name matches CN/SAN exactly (no wildcard overlap abuse)'},
+    'FS-1':   {'priority': 'Medium', 'desc': 'Forward secrecy (ECDHE)'},
+    'WC-1':   {'priority': 'Medium', 'desc': 'No weak ciphers (RC4/3DES/NULL)'},
+
+    # HTTP Protocol & Redirects
+    'HTTPS-1': {'priority': 'High',   'desc': 'HTTP→HTTPS redirect on all hosts'},
     'REDIR-1': {'priority': 'Medium', 'desc': 'No open redirect vulnerabilities'},
-    'REDIR-2': {'priority': 'Medium', 'desc': 'Relative URLs used (not absolute)'},
-    # Content & Resource Security
-    'SR-1': {'priority': 'Low', 'desc': 'SRI on external scripts'},
-    'SRI-2': {'priority': 'Low', 'desc': 'External resources from trusted CDNs'},
-    'MIME-1': {'priority': 'Low', 'desc': 'Correct Content-Type headers'},
-    'MIXED-1': {'priority': 'Medium', 'desc': 'No mixed active content on HTTPS'},
-    'THIRD-1': {'priority': 'Low', 'desc': 'Limited risky third-party scripts'},
-    # API & Modern Web Features
-    'API-1': {'priority': 'Medium', 'desc': 'Rate limiting on endpoints'},
-    'API-2': {'priority': 'Medium', 'desc': 'JSON encoding safe (no XSS)'},
-    'HTTP2-1': {'priority': 'Low', 'desc': 'HTTP/2 or HTTP/3 support'},
-    # Advanced Security Controls
-    # (AUTHZ-1, AUTHZ-2, LOG-1 already above)
-    # Compliance & Standards
-    'COMP-1': {'priority': 'Low', 'desc': 'Privacy policy accessible'},
-    'COMP-2': {'priority': 'Low', 'desc': 'GDPR compliance indicators'},
-    'COMP-3': {'priority': 'Low', 'desc': 'Accessibility security (WCAG)'},
-    # Subdomain Security
-    'SUB-1': {'priority': 'High', 'desc': 'No unmanaged or forgotten subdomains'},
-    'SUB-2': {'priority': 'High', 'desc': 'No subdomain takeover risks'},
-    # WAF & DDoS Protection
-    'WAF-2': {'priority': 'Medium', 'desc': 'WAF actively blocks malicious requests'},
-    'DDoS-1': {'priority': 'Medium', 'desc': 'DDoS protection (e.g., Cloudflare, AWS Shield)'},
-    # Server & Infrastructure Security
-    'SERVER-1': {'priority': 'Medium', 'desc': 'Server software is up-to-date'},
-    # Third-Party & Supply Chain Security
-    'THIRD-2': {'priority': 'Medium', 'desc': 'Regularly audit third-party libraries for vulnerabilities'},
-    'THIRD-3': {'priority': 'Medium', 'desc': 'Subresource Integrity (SRI) for all third-party scripts/styles'},
-    # Compliance & Documentation
-    'COMP-4': {'priority': 'Medium', 'desc': 'Incident response plan documented and tested'},
-    'COMP-5': {'priority': 'Medium', 'desc': 'Software Bill of Materials (SBOM) maintained'},
-    'COMP-6': {'priority': 'Low', 'desc': 'Cookie consent banner is present and functional'},
+    'HSTS-1':  {'priority': 'High',   'desc': 'HSTS max-age ≥31536000 + includeSubDomains'},
+    'HSTS-2':  {'priority': 'High',   'desc': 'HSTS preload directive present'},
+
+    # Security Headers
+    'CSP-1':   {'priority': 'Medium', 'desc': 'Content-Security-Policy non-empty'},
+    'CSP-2':   {'priority': 'Medium', 'desc': 'CSP: no unsafe-inline/eval, strict-dynamic'},
+    'XFO-1':   {'priority': 'Medium', 'desc': 'X-Frame-Options: DENY/SAMEORIGIN'},
+    'XCTO-1':  {'priority': 'Medium', 'desc': 'X-Content-Type-Options: nosniff'},
+    'XXP-1':   {'priority': 'Medium', 'desc': 'X-XSS-Protection: 1; mode=block'},
+    'RP-1':    {'priority': 'Medium', 'desc': 'Referrer-Policy: strict-origin-when-cross-origin or stricter'},
+    'COOP-1':  {'priority': 'Medium', 'desc': 'Cross-Origin-Opener-Policy: same-origin'},
+    'COEP-1':  {'priority': 'Medium', 'desc': 'Cross-Origin-Embedder-Policy: require-corp'},
+    'CORP-1':  {'priority': 'Medium', 'desc': 'Cross-Origin-Resource-Policy: same-site'},
+    'PP-1':    {'priority': 'Medium', 'desc': 'Permissions-Policy present'},
+    'RP-2':    {'priority': 'Low',    'desc': 'Report-To header for security endpoints'},
+    'HEADER-1': {'priority': 'Low',    'desc': 'Clear-Site-Data header on logout'},
+    'HEADER-2': {'priority': 'Low',    'desc': 'Server/X-Powered-By headers removed'},
+    'HEADER-8': {'priority': 'Low',   'desc': 'Early-Data header handled (0-RTT anti-replay)'},
+    'HEADER-9': {'priority': 'Low',   'desc': 'Timing-Allow-Origin restricted'},
+
+    # CORS
+    'CORS-1': {'priority': 'Medium', 'desc': 'CORS: Access-Control-Allow-Origin ≠ "*" for credentialed requests'},
+    'ACAO-1': {'priority': 'Low',    'desc': 'Access-Control-Allow-Credentials absent when origin = *'},
+
+    # Cookies & Session
+    'COO-1':    {'priority': 'High',   'desc': 'Cookies: Secure + HttpOnly + SameSite=Lax/Strict'},
+    'COO-2':    {'priority': 'Low',    'desc': '__Host- or __Secure- prefix used where applicable'},
+    'COO-3':    {'priority': 'Low',    'desc': 'Cookie Max-Age ≤ 1 year'},
+    'SESSION-1': {'priority': 'Medium', 'desc': 'Session ID regenerated on login'},
+    'AUTH-1':   {'priority': 'High',   'desc': 'Session timeout ≤30 min idle'},
+    'AUTH-2':   {'priority': 'High',   'desc': 'CSRF tokens on state-changing requests'},
+    'AUTH-3':   {'priority': 'Medium', 'desc': 'Autocomplete=off on password fields'},
+    'AUTH-4':   {'priority': 'High',   'desc': 'MFA for privileged accounts'},
+    'AUTH-5':   {'priority': 'High',   'desc': 'Account lockout / exponential backoff'},
+    'AUTH-6':   {'priority': 'Medium', 'desc': 'No username enumeration'},
+    'AUTH-7':   {'priority': 'Medium', 'desc': 'Strong password policy or passkeys'},
+    'AUTH-8':   {'priority': 'High',   'desc': 'Secure password storage (bcrypt/Argon2/scrypt)'},
+    'AUTH-9':   {'priority': 'Medium', 'desc': 'OAuth 2.1/PKCE (code_challenge) on auth endpoint'},
+    'AUTH-10':  {'priority': 'Medium', 'desc': 'JWT "aud" claim validated'},
+    'AUTH-11':  {'priority': 'Medium', 'desc': 'JWT "iss" claim allow-listed'},
+    'AUTH-12':  {'priority': 'Medium', 'desc': 'JWT "exp" present and clock-skew ≤ 5 min'},
+    'AUTH-13':  {'priority': 'Low',    'desc': 'JWT "jti" used for replay prevention (optional but checked)'},
+
+    # Input & Injection
+    'INPUT-1':    {'priority': 'High',   'desc': 'SQL-injection protection (parametrized queries)'},
+    'INPUT-2':    {'priority': 'High',   'desc': 'XSS protection (output encoding)'},
+    'INPUT-3':    {'priority': 'High',   'desc': 'Command-injection protection'},
+    'INPUT-4':    {'priority': 'High',   'desc': 'LDAP-injection protection'},
+    'INPUT-5':    {'priority': 'High',   'desc': 'NoSQL-injection protection'},
+    'INPUT-6':    {'priority': 'High',   'desc': 'SSRF protection'},
+    'INPUT-7':    {'priority': 'Medium', 'desc': 'Path-traversal protection'},
+    'INPUT-8':    {'priority': 'Medium', 'desc': 'File-upload: type & size validation + malware scan'},
+    'INPUT-9':    {'priority': 'Medium', 'desc': 'Secure deserialization (allow-list, no native)'},
+    'TEMPLATE-1': {'priority': 'High',   'desc': 'Template-injection protection'},
+
+    # AuthZ & Access Control
+    'AUTHZ-1': {'priority': 'High',   'desc': 'Vertical privilege-escalation checks'},
+    'AUTHZ-2': {'priority': 'High',   'desc': 'IDOR protection'},
+    'AUTHZ-3': {'priority': 'High',   'desc': 'Least-privilege & RBAC enforced'},
+    'AUTHZ-4': {'priority': 'High',   'desc': 'Authorization on every request'},
+    'AUTHZ-5': {'priority': 'Medium', 'desc': 'Business-logic abuse prevention'},
+
+    # Crypto & Data Protection
+    'ENCRYPT-1': {'priority': 'High',   'desc': 'Encryption at rest for sensitive data'},
+    'ENCRYPT-2': {'priority': 'High',   'desc': 'Strong algorithms (AES-256, RSA-2048+, ChaCha20-Poly1305)'},
+    'ENCRYPT-3': {'priority': 'High',   'desc': 'Secure random (CSPRNG)'},
+    'KEY-1':     {'priority': 'High',   'desc': 'No hard-coded secrets'},
+    'KEY-2':     {'priority': 'Medium', 'desc': 'Key-rotation policy enforced'},
+
+    # Logging & Monitoring
+    'LOG-1': {'priority': 'High',   'desc': 'Security events logged (auth, errors, admin actions)'},
+    'LOG-2': {'priority': 'High',   'desc': 'Logs sanitized (no PII/passwords)'},
+    'LOG-3': {'priority': 'Medium', 'desc': 'Centralized log aggregation & alerting'},
+    'LOG-4': {'priority': 'Medium', 'desc': 'Intrusion-detection / anomaly detection'},
+
+    # Error Handling & Info Disclosure
+    'ERROR-1': {'priority': 'Medium', 'desc': 'Generic error pages (no stack traces)'},
+    'ERROR-2': {'priority': 'Low',    'desc': 'Custom 404/500 pages'},
+    'SI-1':    {'priority': 'Low',    'desc': 'No server banner/version leakage'},
+
+    # Files & Directories
+    'DIR-1':    {'priority': 'Medium', 'desc': 'Directory listing disabled'},
+    'ADMIN-1':  {'priority': 'Medium', 'desc': 'No exposed admin consoles'},
+    'ROBOTS-1': {'priority': 'Low',    'desc': 'robots.txt does not leak sensitive paths'},
+    'BACKUP-1': {'priority': 'Medium', 'desc': 'No backup files (.bak, .old, .swp) exposed'},
+    'GIT-1':    {'priority': 'High',   'desc': 'No .git/.svn folder exposed'},
+    'CONFIG-1': {'priority': 'High',   'desc': 'No config files (.env, config.json) exposed'},
+    'SEC-1':    {'priority': 'Low',    'desc': '/.well-known/security.txt present'},
+
+    # Cache & Performance
+    'CACHE-1': {'priority': 'Low', 'desc': 'Cache-Control: no-store on sensitive responses'},
+    'CACHE-2': {'priority': 'Low', 'desc': 'No sensitive data in browser history'},
+
+    # Content Integrity
+    'SRI-1':   {'priority': 'Low',    'desc': 'Sub-resource Integrity on external scripts/styles'},
+    'MIXED-1': {'priority': 'Medium', 'desc': 'No mixed-content (HTTP on HTTPS page)'},
+
+    # API Security
+    'API-1':  {'priority': 'High',   'desc': 'Rate-limiting on all endpoints'},
+    'API-2':  {'priority': 'High',   'desc': 'Authentication (OAuth2/JWT/API-key)'},
+    'API-3':  {'priority': 'High',   'desc': 'Authorization checks per endpoint'},
+    'API-4':  {'priority': 'Medium', 'desc': 'Input validation on all parameters'},
+    'API-5':  {'priority': 'Medium', 'desc': 'Content-Type validation'},
+    'API-6':  {'priority': 'Medium', 'desc': 'API versioning strategy'},
+    'API-7':  {'priority': 'Low',    'desc': 'OpenAPI/Swagger docs with security schemes'},
+    'API-8':  {'priority': 'Low',    'desc': 'API response content-type matches request Accept'},
+    'API-9':  {'priority': 'Medium', 'desc': 'API returns 406/415 for unacceptable content-type'},
+    'API-10': {'priority': 'Low',    'desc': 'API Link header pagination URLs use HTTPS'},
+
+    # GraphQL
+    'GRAPHQL-1': {'priority': 'Medium', 'desc': 'GraphQL: query depth limiting, introspection off'},
+    'GRAPHQL-2': {'priority': 'Medium', 'desc': 'GraphQL cost analysis (query complexity limit enforced)'},
+    'GRAPHQL-3': {'priority': 'Low',    'desc': 'GraphQL uploads disabled or size-limited'},
+
+    # Mobile (server-side observable)
+    'MOBILE-1': {'priority': 'High',   'desc': 'Certificate pinning enforced (pin failure visible)'},
+    'MOBILE-2': {'priority': 'High',   'desc': 'Mobile user-agent rate-limiting / bot detection'},
+    'MOBILE-3': {'priority': 'Medium', 'desc': 'JWTs signed (RS256/ES256) & exp ≤15 min'},
+    'MOBILE-4': {'priority': 'Medium', 'desc': 'iOS Universal Links / Android App-Links assetlinks.json valid'},
+    'MOBILE-5': {'priority': 'Low',    'desc': 'Mobile-app API enforces minimum app-version header'},
+
+    # DNS & Email
+    'DNS-1':   {'priority': 'Low',    'desc': 'DNSSEC (DS record chain of trust)'},
+    'SPF-1':   {'priority': 'Low',    'desc': 'SPF TXT record present'},
+    'DKIM-1':  {'priority': 'Medium', 'desc': 'DKIM public key in DNS'},
+    'DMARC-1': {'priority': 'Low',    'desc': 'DMARC TXT record'},
+    'DMARC-2': {'priority': 'Medium', 'desc': 'DMARC policy p=quarantine or reject'},
+    'CAA-1':   {'priority': 'Low',    'desc': 'CAA record restricting CA'},
+
+    # Cloud / Infra
+    'CLOUD-1': {'priority': 'High',   'desc': 'IAM least-privilege enforced'},
+    'CLOUD-2': {'priority': 'Medium', 'desc': 'Private subnets for DB/cache'},
+    'CLOUD-3': {'priority': 'Medium', 'desc': 'Encrypted storage (EBS, S3, Blob)'},
+    'CLOUD-4': {'priority': 'Low',    'desc': 'IMDSv2 (instance metadata service v2) enforced on cloud instances'},
+
+    # Container / Server
+    'CONTAINER-1': {'priority': 'High',   'desc': 'Non-root container user'},
+    'CONTAINER-2': {'priority': 'High',   'desc': 'Image vulnerability scan passed'},
+    'CONTAINER-3': {'priority': 'Medium', 'desc': 'Read-only root filesystem'},
+    'CONTAINER-4': {'priority': 'Medium', 'desc': 'Resource limits (CPU/memory)'},
+    'CONTAINER-5': {'priority': 'Low',    'desc': 'Seccomp profile default or stricter'},
+    'SERVER-1':    {'priority': 'Medium', 'desc': 'OS & packages up-to-date'},
+
+    # WAF / Edge
+    'WAF-1': {'priority': 'Medium', 'desc': 'WAF/CDN headers present (CF-Ray, X-AWS-WAF)'},
+
+    # Sub-domain
+    'SUB-1': {'priority': 'High', 'desc': 'No dangling CNAME/A (take-over risk)'},
+    'SUB-2': {'priority': 'High', 'desc': 'All sub-domains serve valid cert + security headers'},
+
+    # Compliance helpers
+    'COMP-1': {'priority': 'Low', 'desc': 'Privacy policy reachable'},
+    'COMP-2': {'priority': 'Low', 'desc': 'Cookie consent banner functional'},
+
+    # ========================= NEW: Compliance & Program Evidence =========================
+    # Industry / Compliance Controls (evidence-driven)
+    # PCI-DSS v4.0
+    'PCI-1':   {'priority': 'High',   'desc': 'PAN masking enforced in all logs'},
+    'PCI-2':   {'priority': 'High',   'desc': 'Quarterly ASV scan: PASS'},
+    'PCI-3':   {'priority': 'Medium', 'desc': 'PA-DSS duties separated (segregation of duties)'},
+
+    # HIPAA
+    'HIPAA-1': {'priority': 'High',   'desc': 'PHI encrypted in memory (RAM-scraping defense)'},
+    'HIPAA-2': {'priority': 'High',   'desc': 'Unique user IDs never reissued'},
+    'HIPAA-3': {'priority': 'High',   'desc': 'Automatic logoff ≤ 15 min idle'},
+
+    # PSD2 / Open-Banking
+    'PSD2-1':  {'priority': 'High',   'desc': 'eIDAS qualified certificate on TLS client auth'},
+    'PSD2-2':  {'priority': 'High',   'desc': 'Transaction risk score ≥ 30 (SCA exemption logic)'},
+
+    # ISO 27034 / NIST 800-53
+    'ISO-1':   {'priority': 'Medium', 'desc': 'Security controls traceability matrix (requirement → test → evidence)'},
+    'ISO-2':   {'priority': 'Medium', 'desc': 'Annual control effectiveness review signed off'},
+
+    # Business-Logic Abuse
+    'BL-7':    {'priority': 'High',   'desc': 'Price-/quantity tampering protection'},
+    'BL-8':    {'priority': 'High',   'desc': 'Coupon-/voucher reuse prevention'},
+    'BL-9':    {'priority': 'High',   'desc': 'TOCTOU/race-condition tests on critical transactions'},
+    'BL-10':   {'priority': 'High',   'desc': 'Workflow state-machine bypass tests'},
+    'BL-11':   {'priority': 'Medium', 'desc': 'Time-of-day/geo-velocity anomaly detection'},
+    'BL-12':   {'priority': 'High',   'desc': 'Mass assignment/unexpected parameter protection'},
+
+    # Deep Code / Zero-Day Surface
+    'CODE-1':  {'priority': 'High',   'desc': 'SAST high/critical issues = 0'},
+    'CODE-2':  {'priority': 'High',   'desc': 'DAST high/critical issues = 0'},
+    'CODE-3':  {'priority': 'High',   'desc': 'Dependencies (direct/transitive) CVEs with CVSS ≥ 7 = 0'},
+    'CODE-4':  {'priority': 'Medium', 'desc': 'Secret-scan false-negative rate < 1%'},
+    'CODE-5':  {'priority': 'High',   'desc': 'IaC misconfigurations (Terraform/CloudFormation) = 0'},
+
+    # Red-Team / Bug-Bounty Validation
+    'RED-1':   {'priority': 'High',   'desc': 'Last 12 months: no critical red-team findings open > 30 days'},
+    'RED-2':   {'priority': 'Medium', 'desc': 'Public bug-bounty program active with meaningful payouts'},
+    'RED-3':   {'priority': 'Medium', 'desc': 'ATT&CK mapping coverage ≥ 80%'},
+
+    # Continuous Monitoring
+    'MON-1':   {'priority': 'High',   'desc': 'Mean-time-to-detect (MTTD) ≤ 1 hour'},
+    'MON-2':   {'priority': 'High',   'desc': 'Mean-time-to-respond (MTTR) ≤ 4 hours'},
+    'MON-3':   {'priority': 'Medium', 'desc': 'Security alert false-positive rate ≤ 5%'},
+    'MON-4':   {'priority': 'Medium', 'desc': 'Threat-intel feed auto-blocking (IoCs) enabled'},
+
+    # Cloud / Supply-Chain Hardening (additional)
+    'CLOUD-5': {'priority': 'High',   'desc': 'SCP/Landing-zone guardrails prevent risky API calls'},
+    'CLOUD-6': {'priority': 'High',   'desc': 'KMS key-rotation ≤ 365 days and logged'},
+    'CLOUD-7': {'priority': 'Medium', 'desc': 'Container registry immutable tags + cosign verification'},
+    'SUPPLY-4': {'priority': 'Medium', 'desc': 'SBOM (SPDX/CycloneDX) published per release'},
+    'SUPPLY-5': {'priority': 'Medium', 'desc': 'Vendor security assessment (SIG Lite/CAIQ) passed'}
 }
 
-# Comprehensive scoring system - All 106 parameters included
-# Weights are balanced across 20 categories (total = 100 points)
+
+# Comprehensive scoring system - All 128 parameters organized into 23 categories
+# Weights perfectly balanced to 100 points total
 CATEGORIES = {
+    # Critical Security Controls (55 points total)
     'TLS & Certificates': {
-        'weight': 12,
-        'checks': ['TLS-1', 'CERT-1', 'TLS-2', 'CERT-2', 'FS-1', 'WC-1', 'HSTS-2']
+        'weight': 8,
+        'checks': ['TLS-1', 'TLS-2', 'TLS-3', 'TLS-4', 'TLS-5', 'TLS-6',
+                   'CERT-1', 'CERT-2', 'CERT-3', 'CERT-4', 'CERT-5', 'FS-1', 'WC-1']
     },
     'HTTP Security Headers': {
-        'weight': 15,
-        'checks': ['HTTPS-1', 'HSTS-1', 'CSP-1', 'XFO-1', 'XCTO-1', 'XXP-1', 'RP-1', 'PP-1',
-                   'HEADER-1', 'HEADER-2', 'HEADER-3', 'HEADER-5', 'HEADER-6', 'HEADER-7', 'CORS-1']
-    },
-    'Authentication & Sessions': {
         'weight': 10,
-        'checks': ['AUTH-1', 'AUTH-2', 'AUTH-3', 'AUTH-4', 'AUTH-5', 'AUTH-6', 'AUTH-7',
-                   'SESSION-1', 'COO-1', 'SAMESITE-1']
+        'checks': ['HTTPS-1', 'HSTS-1', 'HSTS-2', 'REDIR-1',
+                   'CSP-1', 'CSP-2', 'XFO-1', 'XCTO-1', 'XXP-1', 'RP-1', 'RP-2',
+                   'COOP-1', 'COEP-1', 'CORP-1', 'PP-1',
+                   'HEADER-1', 'HEADER-2', 'HEADER-8', 'HEADER-9']
     },
-    'Input Validation': {
-        'weight': 9,
+    'Authentication': {
+        'weight': 10,
+        'checks': ['AUTH-1', 'AUTH-2', 'AUTH-3', 'AUTH-4', 'AUTH-5', 'AUTH-6', 'AUTH-7', 'AUTH-8',
+                   'AUTH-9', 'AUTH-10', 'AUTH-11', 'AUTH-12', 'AUTH-13']
+    },
+    'Cookies & Sessions': {
+        'weight': 5,
+        'checks': ['COO-1', 'COO-2', 'COO-3', 'SESSION-1']
+    },
+    'Input Validation & Injection': {
+        'weight': 10,
         'checks': ['INPUT-1', 'INPUT-2', 'INPUT-3', 'INPUT-4', 'INPUT-5', 'INPUT-6',
-                   'INPUT-7', 'INPUT-8', 'INPUT-9']
+                   'INPUT-7', 'INPUT-8', 'INPUT-9', 'TEMPLATE-1']
     },
-    'Access Control': {
+    'Authorization & Access Control': {
         'weight': 6,
-        'checks': ['AUTHZ-1', 'AUTHZ-2', 'AUTHZ-3', 'AUTHZ-4', 'AUTHZ-5', 'AUTHZ-6']
+        'checks': ['AUTHZ-1', 'AUTHZ-2', 'AUTHZ-3', 'AUTHZ-4', 'AUTHZ-5']
     },
-    'Encryption & Data Protection': {
-        'weight': 3,
-        'checks': ['ENCRYPT-1', 'ENCRYPT-2']
+    'Cryptography & Key Management': {
+        'weight': 6,
+        'checks': ['ENCRYPT-1', 'ENCRYPT-2', 'ENCRYPT-3', 'KEY-1', 'KEY-2']
+    },
+
+    # Important Security Controls (30 points total)
+    'API Security': {
+        'weight': 6,
+        'checks': ['API-1', 'API-2', 'API-3', 'API-4', 'API-5', 'API-6', 'API-7',
+                   'API-8', 'API-9', 'API-10']
+    },
+    'Files & Directories': {
+        'weight': 5,
+        'checks': ['DIR-1', 'ADMIN-1', 'ROBOTS-1', 'BACKUP-1', 'GIT-1', 'CONFIG-1', 'SEC-1']
     },
     'Logging & Monitoring': {
         'weight': 4,
@@ -858,147 +975,206 @@ CATEGORIES = {
     },
     'Cloud & Infrastructure': {
         'weight': 4,
-        'checks': ['CLOUD-1', 'CLOUD-2', 'CLOUD-3', 'SERVER-1']
+        'checks': ['CLOUD-1', 'CLOUD-2', 'CLOUD-3', 'CLOUD-4']
+    },
+    'Container Security': {
+        'weight': 4,
+        'checks': ['CONTAINER-1', 'CONTAINER-2', 'CONTAINER-3', 'CONTAINER-4', 'CONTAINER-5']
+    },
+    'Error Handling & Info Disclosure': {
+        'weight': 3,
+        'checks': ['ERROR-1', 'ERROR-2', 'SI-1']
     },
     'DNS & Email Security': {
-        'weight': 7,
-        'checks': ['DNS-1', 'SPF-1', 'DMARC-1', 'DNS-2', 'MX-1', 'DNS-3', 'DNS-4']
-    },
-    'File & Directory Security': {
-        'weight': 7,
-        'checks': ['DIR-1', 'ADMIN-1', 'ROBOTS-1', 'SEC-1', 'BACKUP-1', 'GIT-1', 'CONFIG-1']
-    },
-    'Information Disclosure': {
-        'weight': 6,
-        'checks': ['SI-1', 'TITLE-1', 'ETag-1', 'ERROR-1', 'HEADER-4', 'ERROR-2']
-    },
-    'Performance & Caching': {
         'weight': 2,
-        'checks': ['Cache-1', 'CACHE-2']
-    },
-    'Redirect Security': {
-        'weight': 2,
-        'checks': ['REDIR-1', 'REDIR-2']
-    },
-    'Content Security': {
-        'weight': 5,
-        'checks': ['SR-1', 'SRI-2', 'MIME-1', 'MIXED-1', 'THIRD-1']
-    },
-    'API Security': {
-        'weight': 3,
-        'checks': ['API-1', 'API-2', 'HTTP2-1']
-    },
-    'Advanced Controls': {
-        'weight': 2,
-        'checks': ['WAF-1', 'REPORT-1']
-    },
-    'Compliance & Standards': {
-        'weight': 5,
-        'checks': ['COMP-1', 'COMP-2', 'COMP-3', 'COMP-4', 'COMP-5', 'COMP-6']
+        'checks': ['DNS-1', 'SPF-1', 'DKIM-1', 'DMARC-1', 'DMARC-2', 'CAA-1']
     },
     'Subdomain Security': {
         'weight': 2,
         'checks': ['SUB-1', 'SUB-2']
     },
-    'WAF & DDoS Protection': {
-        'weight': 2,
-        'checks': ['WAF-2', 'DDoS-1']
-    },
-    'Third-Party Security': {
+
+    # Specialized Security Controls (10 points total)
+    'Mobile Security': {
         'weight': 3,
-        'checks': ['THIRD-2', 'THIRD-3']
+        'checks': ['MOBILE-1', 'MOBILE-2', 'MOBILE-3', 'MOBILE-4', 'MOBILE-5']
+    },
+    'GraphQL Security': {
+        'weight': 2,
+        'checks': ['GRAPHQL-1', 'GRAPHQL-2', 'GRAPHQL-3']
+    },
+    'CORS': {
+        'weight': 2,
+        'checks': ['CORS-1', 'ACAO-1']
+    },
+    'Content Integrity': {
+        'weight': 2,
+        'checks': ['SRI-1', 'MIXED-1']
+    },
+    'WAF & Edge Protection': {
+        'weight': 1,
+        'checks': ['WAF-1']
+    },
+
+    # Best Practices & Compliance (5 points total)
+    'Server Security': {
+        'weight': 2,
+        'checks': ['SERVER-1']
+    },
+    'Cache & Performance': {
+        'weight': 2,
+        'checks': ['CACHE-1', 'CACHE-2']
+    },
+    'Compliance': {
+        'weight': 1,
+        'checks': ['COMP-1', 'COMP-2']
     }
 }
 
+# Mapping of standards to relevant control IDs for standards scoring sheets
+STANDARDS = {
+    'ISO 27034': ['ISO-1', 'ISO-2', 'LOG-1', 'LOG-2', 'LOG-3', 'LOG-4', 'AUTHZ-3', 'ENCRYPT-1', 'ENCRYPT-2', 'SERVER-1'],
+    'NIST SP 800-53 Rev 5': ['LOG-1', 'LOG-2', 'LOG-3', 'LOG-4', 'AUTHZ-1', 'AUTHZ-2', 'AUTHZ-3', 'AUTHZ-4', 'ENCRYPT-1', 'ENCRYPT-2', 'KEY-1', 'KEY-2', 'SERVER-1', 'WAF-1'],
+    'PSD2 (RTS on SCA & CSC)': ['PSD2-1', 'PSD2-2', 'AUTH-4', 'API-1', 'API-2', 'API-3', 'ENCRYPT-2', 'KEY-2'],
+    'HIPAA (Security Rule)': ['HIPAA-1', 'HIPAA-2', 'HIPAA-3', 'LOG-2', 'AUTH-4', 'ENCRYPT-1', 'ENCRYPT-2'],
+    'PCI-DSS v4.0': ['PCI-1', 'PCI-2', 'PCI-3', 'COO-1', 'AUTH-5', 'LOG-1', 'LOG-2', 'ENCRYPT-1', 'ENCRYPT-2', 'KEY-2'],
+    # OWASP Top 10 2021 mapping approximation
+    'OWASP Top 10 (2021)': [
+        # A01: Broken Access Control
+        'AUTHZ-1', 'AUTHZ-2', 'AUTHZ-3', 'AUTHZ-4',
+        # A02: Cryptographic Failures
+        'ENCRYPT-1', 'ENCRYPT-2', 'KEY-1', 'KEY-2', 'TLS-1',
+        # A03: Injection
+        'INPUT-1', 'INPUT-2', 'INPUT-3', 'INPUT-4', 'INPUT-5', 'INPUT-6',
+        # A04: Insecure Design (proxy via TEMPLATE-1 and BL-*)
+        'TEMPLATE-1', 'BL-7', 'BL-8', 'BL-9', 'BL-10', 'BL-11', 'BL-12',
+        # A05: Security Misconfiguration
+        'HEADER-2', 'SERVER-1', 'CSP-1', 'CSP-2', 'XCTO-1', 'XFO-1', 'RP-1',
+        # A06: Vulnerable and Outdated Components
+        'SERVER-1', 'CODE-3',
+        # A07: Identification and Authentication Failures
+        'AUTH-1', 'AUTH-2', 'AUTH-4', 'AUTH-5', 'AUTH-7', 'AUTH-8',
+        # A08: Software and Data Integrity Failures
+        'SRI-1', 'SUPPLY-4', 'SUPPLY-5',
+        # A09: Security Logging and Monitoring Failures
+        'LOG-1', 'LOG-2', 'LOG-3', 'LOG-4', 'MON-1', 'MON-2',
+        # A10: SSRF
+        'INPUT-6'
+    ]
+}
+
 # Context-aware weights: Different priorities for different subdomain types
+# Each profile totals exactly 100 points for fair comparison
 CONTEXT_WEIGHTS = {
     'webapp': {
-        'TLS & Certificates': 10,
-        'HTTP Security Headers': 12,
-        'Authentication & Sessions': 15,  # Critical for webapps
-        'Input Validation': 12,           # Critical for webapps
-        'Access Control': 8,              # Higher for webapps
-        'Encryption & Data Protection': 4,
+        # Critical for web applications
+        'TLS & Certificates': 7,
+        'HTTP Security Headers': 9,
+        'Authentication': 11,
+        'Cookies & Sessions': 6,
+        'Input Validation & Injection': 11,
+        'Authorization & Access Control': 8,
+        'Cryptography & Key Management': 5,
+        'Files & Directories': 3,
+        # Important for web applications
+        'API Security': 3,
         'Logging & Monitoring': 5,
         'Cloud & Infrastructure': 3,
-        'DNS & Email Security': 5,
-        'File & Directory Security': 6,
-        'Information Disclosure': 5,
-        'Performance & Caching': 1,
-        'Redirect Security': 3,
-        'Content Security': 4,
-        'API Security': 2,
-        'Advanced Controls': 2,
-        'Compliance & Standards': 4,
-        'Subdomain Security': 1,
-        'WAF & DDoS Protection': 2,
-        'Third-Party Security': 2
+        'Container Security': 3,
+        'Error Handling & Info Disclosure': 3,
+        'DNS & Email Security': 2,
+        'Subdomain Security': 2,
+        'Content Integrity': 3,
+        'CORS': 2,
+        # Best practices
+        'Mobile Security': 2,
+        'GraphQL Security': 1,
+        'WAF & Edge Protection': 2,
+        'Server Security': 3,
+        'Cache & Performance': 4,
+        'Compliance': 2
     },
     'api': {
-        'TLS & Certificates': 15,         # Critical for APIs
-        'HTTP Security Headers': 10,
-        'Authentication & Sessions': 15,  # Critical for APIs
-        'Input Validation': 12,           # Critical for APIs
-        'Access Control': 10,             # Critical for APIs
-        'Encryption & Data Protection': 5,
-        'Logging & Monitoring': 8,        # Higher for APIs
-        'Cloud & Infrastructure': 5,
-        'DNS & Email Security': 3,
-        'File & Directory Security': 4,
-        'Information Disclosure': 3,
-        'Performance & Caching': 1,
-        'Redirect Security': 1,
-        'Content Security': 2,
-        'API Security': 8,                # Much higher for APIs
-        'Advanced Controls': 3,
-        'Compliance & Standards': 3,
+        # Critical for APIs
+        'TLS & Certificates': 9,
+        'HTTP Security Headers': 7,
+        'Authentication': 12,
+        'Cookies & Sessions': 2,
+        'Input Validation & Injection': 10,
+        'Authorization & Access Control': 9,
+        'Cryptography & Key Management': 6,
+        'API Security': 11,
+        # Important for APIs
+        'Logging & Monitoring': 5,
+        'Cloud & Infrastructure': 4,
+        'Container Security': 3,
+        'Error Handling & Info Disclosure': 3,
+        'Files & Directories': 2,
+        'DNS & Email Security': 1,
+        'Mobile Security': 4,
+        'CORS': 3,
+        # Best practices
+        'GraphQL Security': 2,
+        'Content Integrity': 1,
         'Subdomain Security': 1,
-        'WAF & DDoS Protection': 3,
-        'Third-Party Security': 3
+        'WAF & Edge Protection': 2,
+        'Server Security': 1,
+        'Cache & Performance': 1,
+        'Compliance': 1
     },
     'static': {
-        'TLS & Certificates': 15,         # Foundation
-        'HTTP Security Headers': 18,      # Very important for static
-        'Authentication & Sessions': 2,   # Less critical
-        'Input Validation': 2,            # Less critical
-        'Access Control': 2,              # Less critical
-        'Encryption & Data Protection': 3,
-        'Logging & Monitoring': 3,
+        # Critical for static sites
+        'TLS & Certificates': 11,
+        'HTTP Security Headers': 14,
+        'Authentication': 2,
+        'Cookies & Sessions': 2,
+        'Input Validation & Injection': 2,
+        'Authorization & Access Control': 2,
+        'Cryptography & Key Management': 3,
+        'Content Integrity': 5,
+        'Files & Directories': 4,
+        # Important for static
         'Cloud & Infrastructure': 5,
-        'DNS & Email Security': 8,
-        'File & Directory Security': 8,
-        'Information Disclosure': 7,
-        'Performance & Caching': 5,       # More important
-        'Redirect Security': 2,
-        'Content Security': 10,           # Very important for static
+        'Container Security': 4,
+        'DNS & Email Security': 4,
+        'Subdomain Security': 3,
+        'Error Handling & Info Disclosure': 4,
+        'Cache & Performance': 6,
+        'Server Security': 6,
+        'Logging & Monitoring': 4,
+        'WAF & Edge Protection': 5,
+        # Best practices
         'API Security': 1,
-        'Advanced Controls': 2,
-        'Compliance & Standards': 4,
-        'Subdomain Security': 1,
-        'WAF & DDoS Protection': 2,
-        'Third-Party Security': 4
+        'Mobile Security': 2,
+        'GraphQL Security': 1,
+        'CORS': 2,
+        'Compliance': 8
     },
     'other': {
-        'TLS & Certificates': 20,
-        'HTTP Security Headers': 15,
-        'Authentication & Sessions': 5,
-        'Input Validation': 5,
-        'Access Control': 5,
-        'Encryption & Data Protection': 5,
-        'Logging & Monitoring': 5,
-        'Cloud & Infrastructure': 5,
-        'DNS & Email Security': 15,       # Higher for other types
-        'File & Directory Security': 5,
-        'Information Disclosure': 5,
-        'Performance & Caching': 2,
-        'Redirect Security': 2,
-        'Content Security': 5,
-        'API Security': 1,
-        'Advanced Controls': 2,
-        'Compliance & Standards': 3,
-        'Subdomain Security': 5,          # Higher for other
-        'WAF & DDoS Protection': 3,
-        'Third-Party Security': 3
+        # Balanced for unknown/DNS-only
+        'TLS & Certificates': 12,
+        'HTTP Security Headers': 10,
+        'Authentication': 5,
+        'Cookies & Sessions': 3,
+        'Input Validation & Injection': 5,
+        'Authorization & Access Control': 5,
+        'Cryptography & Key Management': 5,
+        'DNS & Email Security': 13,
+        'Subdomain Security': 7,
+        'Files & Directories': 4,
+        'Cloud & Infrastructure': 4,
+        'Container Security': 4,
+        'Server Security': 4,
+        'Logging & Monitoring': 4,
+        'Error Handling & Info Disclosure': 3,
+        'API Security': 2,
+        'Mobile Security': 1,
+        'GraphQL Security': 1,
+        'CORS': 1,
+        'Content Integrity': 2,
+        'WAF & Edge Protection': 2,
+        'Cache & Performance': 1,
+        'Compliance': 2
     }
 }
 
@@ -1086,14 +1262,24 @@ def load_subdomains_from_file(file_path):
     return unique_subdomains
 
 
+# Constants for security checks
+HSTS_MIN_AGE = 31536000  # 1 year in seconds
+REDIRECT_CODES = {301, 302, 307, 308}
+STRICT_REFERRER_POLICIES = {
+    'strict-origin-when-cross-origin', 'strict-origin', 'no-referrer', 'same-origin'
+}
+VALID_XFO_VALUES = {'DENY', 'SAMEORIGIN'}
+
+
 def check_https_redirect(subdomain):
     """Check if HTTP redirects to HTTPS (301/302)."""
     try:
-        resp_http = requests.get(f'http://{subdomain}', timeout=10, allow_redirects=False, verify=False)
+        resp_http = requests.get(
+            f'http://{subdomain}', timeout=10, allow_redirects=False, verify=False
+        )
         location = resp_http.headers.get('location', '').lower()
-        if resp_http.status_code in [301, 302, 307, 308] and location.startswith('https://'):
-            return True
-        return False
+        return (resp_http.status_code in REDIRECT_CODES and
+                location.startswith('https://'))
     except Exception:
         return False
 
@@ -1102,25 +1288,42 @@ def check_hsts(hsts_header):
     """Check HSTS for max-age >=31536000 and includeSubDomains."""
     if not hsts_header:
         return False
-    max_age_match = re.search(r'max-age=(\d+)', str(hsts_header), re.I)
-    include_match = 'includesubdomains' in str(hsts_header).lower()
-    if max_age_match and int(max_age_match.group(1)) >= 31536000 and include_match:
-        return True
-    return False
+    hsts_str = str(hsts_header).lower()
+    max_age_match = re.search(r'max-age=(\d+)', hsts_str, re.I)
+    return (max_age_match and
+            int(max_age_match.group(1)) >= HSTS_MIN_AGE and
+            'includesubdomains' in hsts_str)
 
 
+def check_header_present(header):
+    """Check if header is present and non-empty."""
+    return bool(header and str(header).strip())
+
+
+def check_header_value(header, expected_values):
+    """Check if header matches expected values (case-insensitive set comparison)."""
+    if not header:
+        return False
+    return str(header).upper() in expected_values
+
+
+def check_header_contains(header, expected_patterns):
+    """Check if header contains any of the expected patterns."""
+    if not header:
+        return False
+    header_lower = str(header).lower()
+    return any(pattern in header_lower for pattern in expected_patterns)
+
+
+# Simplified check functions using generic helpers
 def check_csp(csp_header):
     """Check if CSP is present and non-empty."""
-    if not csp_header or not str(csp_header).strip():
-        return False
-    return True
+    return check_header_present(csp_header)
 
 
 def check_xfo(xfo_header):
     """X-Frame-Options: DENY or SAMEORIGIN."""
-    if not xfo_header:
-        return False
-    return str(xfo_header).upper() in ['DENY', 'SAMEORIGIN']
+    return check_header_value(xfo_header, VALID_XFO_VALUES)
 
 
 def check_xcto(xcto_header):
@@ -1134,38 +1337,37 @@ def check_xxp(xxp_header):
     """X-XSS-Protection: 1; mode=block."""
     if not xxp_header:
         return False
-    xxp_str = str(xxp_header)
-    return '1' in xxp_str and 'mode=block' in xxp_str.lower()
+    xxp_str = str(xxp_header).lower()
+    return '1' in xxp_str and 'mode=block' in xxp_str
 
 
 def check_rp(rp_header):
     """Check Referrer-Policy for strict policies."""
-    if not rp_header:
-        return False
-    strict_policies = ['strict-origin-when-cross-origin', 'strict-origin', 'no-referrer', 'same-origin']
-    return any(policy in str(rp_header).lower() for policy in strict_policies)
+    return check_header_contains(rp_header, STRICT_REFERRER_POLICIES)
 
 
 def check_pp(pp_header):
     """Check if Permissions-Policy is present and non-empty."""
-    return bool(pp_header and str(pp_header).strip())
+    return check_header_present(pp_header)
 
 
 def check_cookies_secure_httponly(response):
     """Check if all cookies have Secure and HttpOnly flags."""
-    cookies = response.cookies
-    if not cookies:
+    if not response.cookies:
         return True
     
     set_cookie_headers = response.headers.get('Set-Cookie', '')
     if not set_cookie_headers:
         return True
     
-    cookie_list = [set_cookie_headers] if isinstance(set_cookie_headers, str) else set_cookie_headers
+    # Handle both single string and list of cookie headers
+    cookie_list = ([set_cookie_headers] if isinstance(set_cookie_headers, str)
+                   else set_cookie_headers)
     
+    # All cookies must have both flags
     for cookie_header in cookie_list:
         cookie_lower = cookie_header.lower()
-        if 'secure' not in cookie_lower or 'httponly' not in cookie_lower:
+        if not ('secure' in cookie_lower and 'httponly' in cookie_lower):
             return False
     return True
 
@@ -1173,124 +1375,147 @@ def check_cookies_secure_httponly(response):
 def check_si(server_header):
     """Check if Server header leaks version information."""
     if not server_header:
-        return True
-    return '/' not in str(server_header)
+        return True  # No header = no leak
+    return '/' not in str(server_header)  # Version number typically after /
+
+
+def check_dns_record(subdomain, record_type, validation_func=None):
+    """
+    Generic DNS record checker.
+    
+    Args:
+        subdomain: Domain to query
+        record_type: DNS record type ('TXT', 'DS', 'MX', etc.)
+        validation_func: Optional function to validate record content
+    
+    Returns:
+        True if records exist (and pass validation if func provided)
+    """
+    try:
+        parts = subdomain.split('.')
+        domain = '.'.join(parts[-2:]) if len(parts) >= 2 else subdomain
+        
+        records = dns.resolver.resolve(domain, record_type)
+
+        if validation_func:
+            return any(validation_func(str(record)) for record in records)
+        return bool(records)
+    except DNSException:
+        return False
 
 
 def check_spf(subdomain):
     """SPF TXT record present."""
-    try:
-        parts = subdomain.split('.')
-        domain = '.'.join(parts[-2:]) if len(parts) >= 2 else subdomain
-        
-        txt_records = dns.resolver.resolve(domain, 'TXT')
-        for txt in txt_records:
-            txt_string = str(txt).strip('"')
-            if txt_string.startswith('v=spf1'):
-                return True
-        return False
-    except DNSException:
-        return False
+    return check_dns_record(
+        subdomain,
+        'TXT',
+        lambda txt: txt.strip('"').startswith('v=spf1')
+    )
 
 
 def check_dnssec(subdomain):
     """Check if DNSSEC is enabled (DS records present)."""
-    try:
-        parts = subdomain.split('.')
-        domain = '.'.join(parts[-2:]) if len(parts) >= 2 else subdomain
-        
-        ds_records = dns.resolver.resolve(domain, 'DS')
-        return bool(ds_records)
-    except DNSException:
-        return False
+    return check_dns_record(subdomain, 'DS')
 
 
 def check_hpkp(hpkp_header):
     """Check HPKP is absent (deprecated, should not be present)."""
-    return not hpkp_header
+    return not hpkp_header  # Good if absent
 
 
 def check_etag(etag_header):
     """Check if ETag is not weak or timestamp-based."""
     if not etag_header:
-        return True
+        return True  # No ETag is fine
     etag_str = str(etag_header)
-    if etag_str.startswith('W/'):
-        return False
-    return not re.search(r'\d{10,}', etag_str)
+    # Fail if weak or contains timestamp (10+ digits)
+    return not (etag_str.startswith('W/') or re.search(r'\d{10,}', etag_str))
 
 
 def check_cache(cache_header):
     """Cache-Control: no-store present."""
-    if not cache_header:
-        return False
-    return 'no-store' in str(cache_header).lower()
+    return 'no-store' in str(cache_header).lower() if cache_header else False
 
 
 def check_sri(resp_text):
-    """Check if external scripts have integrity attribute."""
+    """Check if external scripts have integrity attribute (SRI)."""
     try:
         soup = BeautifulSoup(resp_text, 'html.parser')
-        scripts = soup.find_all('script', src=True)
+        external_scripts = [
+            script for script in soup.find_all('script', src=True)
+            if script.get('src', '').startswith(('http', '//'))
+        ]
         
-        for script in scripts:
-            src = script.get('src', '')
-            if (src.startswith('http') or src.startswith('//')) and script.get('integrity'):
-                return True
-        return False
+        # Check if any external script has integrity
+        return any(script.get('integrity') for script in external_scripts)
     except Exception:
         return False
 
 
 def scan_headers_and_config(subdomain):
-    """Manual header and config checks."""
-    all_results = {}
-    success = False
+    """Manual header and config checks with consolidated logic."""
+    # Default failed results
+    default_results = {
+        'HTTPS-1': False, 'CSP-1': False, 'XFO-1': False, 'XCTO-1': False,
+        'XXP-1': False, 'RP-1': False, 'PP-1': False, 'COO-1': False,
+        'SI-1': False, 'HPKP-1': True, 'ETag-1': True, 'Cache-1': False,
+        'SR-1': False
+    }
     
     try:
-        resp = requests.get(f'https://{subdomain}', timeout=10, verify=False, allow_redirects=True)
+        resp = requests.get(
+            f'https://{subdomain}',
+            timeout=10,
+            verify=False,
+            allow_redirects=True
+        )
+
+        if resp.status_code != 200:
+            return default_results, False
+
         headers = resp.headers
         html = resp.text
-        success = (resp.status_code == 200)
         
-        all_results['HTTPS-1'] = check_https_redirect(subdomain)
-        all_results['CSP-1'] = check_csp(headers.get('Content-Security-Policy'))
-        all_results['XFO-1'] = check_xfo(headers.get('X-Frame-Options'))
-        all_results['XCTO-1'] = check_xcto(headers.get('X-Content-Type-Options'))
-        all_results['XXP-1'] = check_xxp(headers.get('X-XSS-Protection'))
-        all_results['RP-1'] = check_rp(headers.get('Referrer-Policy'))
-        all_results['PP-1'] = check_pp(headers.get('Permissions-Policy'))
-        all_results['COO-1'] = check_cookies_secure_httponly(resp)
-        all_results['SI-1'] = check_si(headers.get('Server'))
-        all_results['HPKP-1'] = check_hpkp(headers.get('Public-Key-Pins'))
-        all_results['ETag-1'] = check_etag(headers.get('ETag'))
-        all_results['Cache-1'] = check_cache(headers.get('Cache-Control'))
-        all_results['SR-1'] = check_sri(html)
+        # Perform all checks
+        results = {
+            'HTTPS-1': check_https_redirect(subdomain),
+            'CSP-1': check_csp(headers.get('Content-Security-Policy')),
+            'XFO-1': check_xfo(headers.get('X-Frame-Options')),
+            'XCTO-1': check_xcto(headers.get('X-Content-Type-Options')),
+            'XXP-1': check_xxp(headers.get('X-XSS-Protection')),
+            'RP-1': check_rp(headers.get('Referrer-Policy')),
+            'PP-1': check_pp(headers.get('Permissions-Policy')),
+            'COO-1': check_cookies_secure_httponly(resp),
+            'SI-1': check_si(headers.get('Server')),
+            'HPKP-1': check_hpkp(headers.get('Public-Key-Pins')),
+            'ETag-1': check_etag(headers.get('ETag')),
+            'Cache-1': check_cache(headers.get('Cache-Control')),
+            'SR-1': check_sri(html)
+        }
         
-        return all_results, success
+        return results, True
         
     except Exception:
-        return {
-            'HTTPS-1': False, 'CSP-1': False, 'XFO-1': False, 'XCTO-1': False,
-            'XXP-1': False, 'RP-1': False, 'PP-1': False, 'COO-1': False,
-            'SI-1': False, 'HPKP-1': True, 'ETag-1': True, 'Cache-1': False,
-            'SR-1': False
-        }, False
+        return default_results, False
 
 
 def scan_tls_and_dns(subdomain):
-    """TLS via sslyze, DNS via dnspython."""
-    tls_results = {}
-    dns_results = {}
+    """TLS via sslyze, DNS via dnspython - optimized version."""
+    # Default failed TLS results
+    default_tls = {
+        'TLS-1': False, 'CERT-1': False, 'HSTS-1': False,
+        'FS-1': False, 'WC-1': False
+    }
     
-    # DNS checks
-    dns_results['DNS-1'] = check_dnssec(subdomain)
-    dns_results['SPF-1'] = check_spf(subdomain)
+    # DNS checks (always run)
+    dns_results = {
+        'DNS-1': check_dnssec(subdomain),
+        'SPF-1': check_spf(subdomain)
+    }
     
     # TLS checks with sslyze
     try:
         server_location = ServerNetworkLocation(hostname=subdomain, port=443)
-
         scan_request = ServerScanRequest(
             server_location=server_location,
             scan_commands={
@@ -1305,41 +1530,18 @@ def scan_tls_and_dns(subdomain):
         scanner.queue_scans([scan_request])
         
         for server_scan_result in scanner.get_results():
-            # Check if connection was successful
+            # Check connection status
             if server_scan_result.connectivity_status != ServerConnectivityStatusEnum.COMPLETED:
-                tls_results['TLS-1'] = False
-                tls_results['CERT-1'] = False
-                tls_results['HSTS-1'] = False
-                tls_results['FS-1'] = False
-                tls_results['WC-1'] = False
-                return tls_results, dns_results
+                return default_tls, dns_results
 
             scan_result = server_scan_result.scan_result
-            
-            # CERT-1: Valid certificate chain
-            if scan_result.certificate_info.status.name == 'COMPLETED':
-                cert_result = scan_result.certificate_info.result
-                if cert_result.certificate_deployments:
-                    cert_deployment = cert_result.certificate_deployments[0]
-                    received_chain = cert_deployment.received_certificate_chain
-                    
-                    if received_chain:
-                        leaf_cert = received_chain[0]
-                        now = datetime.utcnow()
-                        
-                        valid_dates = (leaf_cert.not_valid_before_utc <= now <= leaf_cert.not_valid_after_utc)
-                        path_validation_results = cert_deployment.path_validation_results
-                        is_trusted = any(result.was_validation_successful for result in path_validation_results)
-                        
-                        tls_results['CERT-1'] = valid_dates and is_trusted
-                    else:
-                        tls_results['CERT-1'] = False
-                else:
-                    tls_results['CERT-1'] = False
-            else:
-                tls_results['CERT-1'] = False
-            
-            # TLS-1: TLS 1.2+ enforced
+            tls_results = {}
+
+            # Certificate validation
+            tls_results['CERT-1'] = validate_certificate(
+                scan_result.certificate_info)
+
+            # TLS version check
             tls12_result = scan_result.tls_1_2_cipher_suites
             tls13_result = scan_result.tls_1_3_cipher_suites
             
@@ -1350,52 +1552,233 @@ def scan_tls_and_dns(subdomain):
             
             tls_results['TLS-1'] = has_tls12 or has_tls13
             
-            # FS-1: Forward secrecy
-            tls_results['FS-1'] = False
-            for suite_result in [tls12_result, tls13_result]:
-                if suite_result.status.name == 'COMPLETED':
-                    for accepted_suite in suite_result.result.accepted_cipher_suites:
-                        if 'ECDHE' in accepted_suite.cipher_suite.name or 'DHE' in accepted_suite.cipher_suite.name:
-                            tls_results['FS-1'] = True
-                            break
-                if tls_results['FS-1']:
-                    break
-            
-            # WC-1: No weak ciphers
-            weak_patterns = ['RC4', '3DES', 'NULL', 'EXPORT', 'DES', 'MD5']
-            tls_results['WC-1'] = True
-            for suite_result in [tls12_result, tls13_result]:
-                if suite_result.status.name == 'COMPLETED':
-                    for accepted_suite in suite_result.result.accepted_cipher_suites:
-                        if any(weak in accepted_suite.cipher_suite.name.upper() for weak in weak_patterns):
-                            tls_results['WC-1'] = False
-                            break
-                if not tls_results['WC-1']:
-                    break
-            
-            # HSTS-1: From HTTP headers
-            if scan_result.http_headers.status.name == 'COMPLETED':
-                hsts_header = scan_result.http_headers.result.strict_transport_security_header
-                if hsts_header:
-                    tls_results['HSTS-1'] = check_hsts(hsts_header.max_age)
-                else:
-                    tls_results['HSTS-1'] = False
-            else:
-                tls_results['HSTS-1'] = False
-                
+            # Forward secrecy and weak cipher checks
+            tls_results['FS-1'] = check_forward_secrecy(
+                [tls12_result, tls13_result])
+            tls_results['WC-1'] = check_weak_ciphers(
+                [tls12_result, tls13_result])
+
+            # HSTS header check
+            tls_results['HSTS-1'] = check_hsts_from_scan(
+                scan_result.http_headers)
+
+            return tls_results, dns_results
+
     except Exception:
-        if 'TLS-1' not in tls_results:
-            tls_results['TLS-1'] = False
-        if 'CERT-1' not in tls_results:
-            tls_results['CERT-1'] = False
-        if 'HSTS-1' not in tls_results:
-            tls_results['HSTS-1'] = False
-        if 'FS-1' not in tls_results:
-            tls_results['FS-1'] = False
-        if 'WC-1' not in tls_results:
-            tls_results['WC-1'] = False
-    
-    return tls_results, dns_results
+        return default_tls, dns_results
+
+
+def validate_certificate(cert_info_result):
+    """Validate SSL certificate."""
+    if cert_info_result.status.name != 'COMPLETED':
+        return False
+
+    cert_result = cert_info_result.result
+    if not cert_result.certificate_deployments:
+        return False
+
+    cert_deployment = cert_result.certificate_deployments[0]
+    received_chain = cert_deployment.received_certificate_chain
+
+    if not received_chain:
+        return False
+
+    # Check validity dates
+    leaf_cert = received_chain[0]
+    now = datetime.utcnow()
+    valid_dates = (leaf_cert.not_valid_before_utc <= now <=
+                   leaf_cert.not_valid_after_utc)
+
+    # Check trust
+    path_validation_results = cert_deployment.path_validation_results
+    is_trusted = any(result.was_validation_successful
+                     for result in path_validation_results)
+
+    return valid_dates and is_trusted
+
+
+def check_forward_secrecy(suite_results):
+    """Check if forward secrecy is supported (ECDHE/DHE)."""
+    for suite_result in suite_results:
+        if suite_result.status.name == 'COMPLETED':
+            for accepted_suite in suite_result.result.accepted_cipher_suites:
+                cipher_name = accepted_suite.cipher_suite.name
+                if 'ECDHE' in cipher_name or 'DHE' in cipher_name:
+                    return True
+    return False
+
+
+def check_weak_ciphers(suite_results):
+    """Check for absence of weak ciphers (returns True if no weak ciphers)."""
+    weak_patterns = {'RC4', '3DES', 'NULL', 'EXPORT', 'DES', 'MD5'}
+
+    for suite_result in suite_results:
+        if suite_result.status.name == 'COMPLETED':
+            for accepted_suite in suite_result.result.accepted_cipher_suites:
+                cipher_name = accepted_suite.cipher_suite.name.upper()
+                if any(weak in cipher_name for weak in weak_patterns):
+                    return False
+    return True
+
+
+def check_hsts_from_scan(http_headers_result):
+    """Check HSTS from sslyze scan result."""
+    if http_headers_result.status.name != 'COMPLETED':
+        return False
+
+    hsts_header = http_headers_result.result.strict_transport_security_header
+    return check_hsts(hsts_header.max_age) if hsts_header else False
+
+
+# ========================= Evidence ingestion & evaluation =========================
+def load_evidence(path: str):
+    """Load compliance/program evidence JSON if provided."""
+    if not path:
+        return {}
+    try:
+        p = Path(path)
+        if not p.exists():
+            print(f"⚠️ Evidence file not found: {path}")
+            return {}
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.load(f) or {}
+    except Exception as e:
+        print(f"⚠️ Could not load evidence: {e}")
+        return {}
+
+
+def evaluate_evidence_checks(evidence: dict) -> dict:
+    """Evaluate evidence-driven checks and return {check_id: bool}."""
+    out = {}
+    pci = evidence.get('pci', {})
+    hipaa = evidence.get('hipaa', {})
+    psd2 = evidence.get('psd2', {})
+    iso = evidence.get('iso_nist', {})
+    bl = evidence.get('business_logic', {})
+    code = evidence.get('code_security', {})
+    red = evidence.get('red_team', {})
+    mon = evidence.get('monitoring', {})
+    cloud = evidence.get('cloud_supply', {})
+
+    # PCI-DSS
+    out['PCI-1'] = bool(pci.get('pan_masking_in_logs'))
+    # Treat 'pass' / True as pass
+    asv = pci.get('quarterly_asv_grade')
+    out['PCI-2'] = (str(asv).lower() ==
+                    'pass') if asv is not None else bool(pci.get('qsa_asv_passed', False))
+    out['PCI-3'] = bool(pci.get('pa_dss_separation_of_duties'))
+
+    # HIPAA
+    out['HIPAA-1'] = bool(hipaa.get('phi_encryption_in_memory'))
+    out['HIPAA-2'] = bool(hipaa.get('unique_user_id_never_reused'))
+    idle = hipaa.get('auto_logoff_idle_minutes')
+    out['HIPAA-3'] = (isinstance(idle, (int, float)) and idle <= 15)
+
+    # PSD2
+    out['PSD2-1'] = bool(psd2.get('eidas_qualified_client_cert'))
+    trs = psd2.get('transaction_risk_score_min')
+    out['PSD2-2'] = (isinstance(trs, (int, float)) and trs >= 30)
+
+    # ISO/NIST
+    out['ISO-1'] = bool(iso.get('traceability_matrix_exists'))
+    out['ISO-2'] = bool(iso.get('annual_control_review_signed'))
+
+    # Business Logic
+    out['BL-7'] = bool(bl.get('price_quantity_tamper_protection'))
+    out['BL-8'] = bool(bl.get('coupon_reuse_prevention'))
+    out['BL-9'] = bool(bl.get('race_condition_tests'))
+    out['BL-10'] = bool(bl.get('workflow_state_bypass_tests'))
+    out['BL-11'] = bool(bl.get('time_geo_anomaly_detection'))
+    out['BL-12'] = bool(bl.get('mass_assignment_protection'))
+
+    # Deep Code
+    out['CODE-1'] = bool(code.get('sast_high_critical_zero'))
+    out['CODE-2'] = bool(code.get('dast_high_critical_zero'))
+    out['CODE-3'] = bool(code.get('deps_cvss7_zero'))
+    fnr = code.get('secret_scan_false_negative_rate')
+    out['CODE-4'] = (isinstance(fnr, (int, float)) and fnr < 1)
+    out['CODE-5'] = bool(code.get('iac_misconfig_zero'))
+
+    # Red-Team / Bug-Bounty
+    out['RED-1'] = bool(red.get('no_critical_open_over_30d'))
+    out['RED-2'] = bool(red.get('bug_bounty_active_paid'))
+    cov = red.get('mitre_attack_coverage_percent')
+    out['RED-3'] = (isinstance(cov, (int, float)) and cov >= 80)
+
+    # Monitoring
+    mttd = mon.get('mttd_minutes')
+    mttr = mon.get('mttr_minutes')
+    fpr = mon.get('false_positive_rate_percent')
+    out['MON-1'] = (isinstance(mttd, (int, float)) and mttd <= 60)
+    out['MON-2'] = (isinstance(mttr, (int, float)) and mttr <= 240)
+    out['MON-3'] = (isinstance(fpr, (int, float)) and fpr <= 5)
+    out['MON-4'] = bool(mon.get('threat_intel_auto_block_enabled'))
+
+    # Cloud / Supply
+    out['CLOUD-5'] = bool(cloud.get('scp_guardrails_enabled'))
+    rot = cloud.get('kms_rotation_days')
+    out['CLOUD-6'] = (isinstance(rot, (int, float)) and rot <= 365)
+    out['CLOUD-7'] = bool(cloud.get('container_registry_immutable_cosign'))
+    out['SUPPLY-4'] = bool(cloud.get('sbom_published'))
+    out['SUPPLY-5'] = bool(cloud.get('vendor_siglite_caiq_passed'))
+
+    return out
+
+
+# Example evidence JSON template embedded for reference
+SAMPLE_EVIDENCE_JSON = {
+    "pci": {
+        "pan_masking_in_logs": True,
+        "quarterly_asv_grade": "pass",
+        "pa_dss_separation_of_duties": True
+    },
+    "hipaa": {
+        "phi_encryption_in_memory": True,
+        "unique_user_id_never_reused": True,
+        "auto_logoff_idle_minutes": 15
+    },
+    "psd2": {
+        "eidas_qualified_client_cert": True,
+        "transaction_risk_score_min": 35
+    },
+    "iso_nist": {
+        "traceability_matrix_exists": True,
+        "annual_control_review_signed": True
+    },
+    "business_logic": {
+        "price_quantity_tamper_protection": True,
+        "coupon_reuse_prevention": True,
+        "race_condition_tests": True,
+        "workflow_state_bypass_tests": True,
+        "time_geo_anomaly_detection": True,
+        "mass_assignment_protection": True
+    },
+    "code_security": {
+        "sast_high_critical_zero": True,
+        "dast_high_critical_zero": True,
+        "deps_cvss7_zero": True,
+        "secret_scan_false_negative_rate": 0.5,
+        "iac_misconfig_zero": True
+    },
+    "red_team": {
+        "no_critical_open_over_30d": True,
+        "bug_bounty_active_paid": True,
+        "mitre_attack_coverage_percent": 85
+    },
+    "monitoring": {
+        "mttd_minutes": 45,
+        "mttr_minutes": 180,
+        "false_positive_rate_percent": 3,
+        "threat_intel_auto_block_enabled": True
+    },
+    "cloud_supply": {
+        "scp_guardrails_enabled": True,
+        "kms_rotation_days": 180,
+        "container_registry_immutable_cosign": True,
+        "sbom_published": True,
+        "vendor_siglite_caiq_passed": True
+    }
+}
 
 
 def compute_scores(all_checks, subdomain_type='other'):
@@ -1407,30 +1790,25 @@ def compute_scores(all_checks, subdomain_type='other'):
         subdomain_type: Type of subdomain ('webapp', 'api', 'static', 'other')
     
     Returns:
-        scores: Dictionary of category scores
-        total_score: Total weighted score out of 100
-        risk_rating: Risk rating based on type and score
+        tuple: (scores dict, total_score float, risk_rating str)
     """
     scores = {}
-    total_score = 0
-    
-    # Use context-aware weights if available, otherwise use default weights
+    total_score = 0.0
+
+    # Get context-aware weights (fallback to default if not found)
     weights = CONTEXT_WEIGHTS.get(subdomain_type, {})
 
     for cat, info in CATEGORIES.items():
         cat_checks = [all_checks.get(check, False) for check in info['checks']]
-        if len(cat_checks) > 0:
+
+        if cat_checks:
             # Use context-aware weight or fall back to default weight
             weight = weights.get(cat, info['weight'])
             cat_score = (sum(cat_checks) / len(cat_checks)) * weight
-        else:
-            cat_score = 0
-        scores[cat] = round(cat_score, 2)
-        total_score += cat_score
-    
-    # Calculate risk rating based on subdomain type and score
-    risk_rating = calculate_risk_rating(total_score, subdomain_type)
+            scores[cat] = round(cat_score, 2)
+            total_score += cat_score
 
+    risk_rating = calculate_risk_rating(total_score, subdomain_type)
     return scores, round(total_score, 2), risk_rating
 
 
@@ -1438,41 +1816,30 @@ def calculate_risk_rating(score, subdomain_type):
     """
     Calculate risk rating based on score and subdomain type.
     
-    Different thresholds for different types:
-    - webapp/api: Higher security requirements (Critical/High risk)
-    - static: Medium security requirements
-    - other: Basic security requirements
+    Thresholds adjusted by subdomain type:
+    - webapp/api: Stricter (Critical < 40, High < 60, Medium < 80)
+    - static: Moderate (Critical < 30, High < 50, Medium < 70)
+    - other: Relaxed (Critical < 20, High < 40, Medium < 60)
     """
-    if subdomain_type in ['webapp', 'api']:
-        # Stricter thresholds for interactive applications
-        if score >= 80:
-            return 'Low'
-        elif score >= 60:
-            return 'Medium'
-        elif score >= 40:
-            return 'High'
-        else:
-            return 'Critical'
-    elif subdomain_type == 'static':
-        # Moderate thresholds for static content
-        if score >= 70:
-            return 'Low'
-        elif score >= 50:
-            return 'Medium'
-        elif score >= 30:
-            return 'High'
-        else:
-            return 'Critical'
-    else:  # other
-        # Relaxed thresholds for non-interactive services
-        if score >= 60:
-            return 'Low'
-        elif score >= 40:
-            return 'Medium'
-        elif score >= 20:
-            return 'High'
-        else:
-            return 'Critical'
+    # Define thresholds: (critical_max, high_max, medium_max)
+    thresholds = {
+        'webapp': (40, 60, 80),
+        'api': (40, 60, 80),
+        'static': (30, 50, 70),
+        'other': (20, 40, 60)
+    }
+
+    critical, high, medium = thresholds.get(
+        subdomain_type, thresholds['other'])
+
+    if score >= medium:
+        return 'Low'
+    elif score >= high:
+        return 'Medium'
+    elif score >= critical:
+        return 'High'
+    else:
+        return 'Critical'
 
 
 def main():
@@ -1504,7 +1871,7 @@ Output:
   website_ranking.xlsx with 3 sheets:
     - Security Results (detailed scores per subdomain variant)
     - Summary By Type (statistics by subdomain type)
-    - Checklist (all 106 security controls)
+    - Checklist (all security controls)
         """
     )
     parser.add_argument(
@@ -1513,9 +1880,11 @@ Output:
         '--file', '-f', help='Input file with subdomains (TXT or XLSX)')
     parser.add_argument('--output', '-o', default=None,
                         help='Output Excel file (default: {domain}_security_report.xlsx)')
-    
+    parser.add_argument('--evidence', '-e', default=None,
+                        help='Path to JSON evidence file for compliance/program checks (see SAMPLE_EVIDENCE_JSON in this script for schema)')
+
     args = parser.parse_args()
-    
+
     print("=" * 80)
     print("Comprehensive Subdomain Security Scanner")
     print("=" * 80)
@@ -1573,14 +1942,14 @@ Output:
         print("\nNo input specified. Available files:")
         txt_files = list(Path('.').glob('*_active.txt'))
         xlsx_files = list(Path('.').glob('*.xlsx'))
-        
+
         all_files = txt_files + xlsx_files
         if all_files:
             for i, f in enumerate(all_files, 1):
                 print(f"  {i}. {f.name}")
             print()
             choice = input("Enter file number, path, or domain name: ").strip()
-            
+
             try:
                 idx = int(choice) - 1
                 if 0 <= idx < len(all_files):
@@ -1632,17 +2001,17 @@ Output:
                 except Exception as e:
                     print(f"\n❌ Error loading file: {e}")
                     return
-    
+
     if not subdomains:
         print("\n❌ No subdomains found!")
         return
-    
+
     print(f"\nStarting security scan of {len(subdomains)} subdomains...")
     print(f"Note: Both www and non-www variants will be checked for each subdomain")
     print(
         f"Estimated time: ~{len(subdomains) * 2 * 3 / 60:.1f} minutes (with 3s rate limit)")
     print()
-    
+
     # Generate output filename based on domain or use custom output
     if args.output:
         output_file = args.output
@@ -1666,6 +2035,9 @@ Output:
         output_file = f'{safe_domain}_security_report.xlsx'
 
     print(f"Output file: {output_file}\n")
+
+    # Load evidence if provided
+    evidence_data = load_evidence(args.evidence) if args.evidence else {}
 
     # Initialize Excel file with headers (incremental writing)
     # We'll create separate sheets for Active and Inactive subdomains so
@@ -1692,7 +2064,7 @@ Output:
     scanned_count = 0
     # Each subdomain has 2 variants (www and non-www)
     total_to_scan = len(subdomains) * 2
-    
+
     # MAIN SCANNING LOOP
     # For each discovered subdomain, we test BOTH www and non-www variants
     # Example: If we found 'portal.example.com', we'll test:
@@ -1741,6 +2113,14 @@ Output:
                             all_checks[k] = dns_results[k]
                 except Exception:
                     pass
+            # Merge evidence-driven checks (these are organization-wide, applied to all variants)
+            if evidence_data:
+                try:
+                    evidence_checks = evaluate_evidence_checks(evidence_data)
+                    all_checks.update(evidence_checks)
+                except Exception as ev_err:
+                    print(f"  ⚠️  Evidence evaluation error: {ev_err}")
+
             # Mark missing relevant checks as False
             for check in relevant_checks:
                 if check not in all_checks:
@@ -1764,6 +2144,13 @@ Output:
             # Add individual check results (Yes/No for each relevant check)
             for check_id in relevant_checks:
                 result_row[f"{check_id}_Pass"] = 'Yes' if all_checks[check_id] else 'No'
+
+            # NEW: Store ALL parameters (for comprehensive evidence sheet)
+            # Store complete check results
+            result_row['all_checks_dict'] = all_checks.copy()
+            # Store which checks were relevant
+            result_row['relevant_checks_list'] = relevant_checks
+
             results_list.append(result_row)
 
             # OPTIMIZED: Efficient row-level append using openpyxl directly
@@ -1840,7 +2227,7 @@ Output:
 
             # Rate limiting: 3 seconds between scans (ethical scanning)
             time.sleep(3)
-    
+
     print("\n" + "=" * 80)
     print("Finalizing Excel report...")
     print("=" * 80)
@@ -2013,6 +2400,167 @@ Output:
             checklist_df = pd.DataFrame(checklist_data)
             checklist_df.to_excel(writer, sheet_name='Checklist', index=False)
 
+            # NEW SHEET 1: All Parameters for Every Subdomain
+            # This is the comprehensive evidence sheet with ALL checks
+            print("\n  📋 Creating comprehensive parameter sheet (ALL checks)...")
+            all_params_data = []
+
+            for result in results_list:
+                subdomain = result['Subdomain']
+                sub_type = result['Type']
+                all_checks_dict = result.get('all_checks_dict', {})
+                relevant_checks = result.get('relevant_checks_list', [])
+
+                param_row = {
+                    'Subdomain': subdomain,
+                    'Type': sub_type,
+                    'Scan_Success': result['Scan_Success'],
+                    'Total_Score': result['Total_Score'],
+                    'Risk_Rating': result['Risk_Rating']
+                }
+
+                # Add ALL parameters (even if not checked for this type)
+                for check_id in sorted(CHECKS.keys()):
+                    if check_id in all_checks_dict:
+                        # Check was performed
+                        param_row[check_id] = 'Pass' if all_checks_dict[check_id] else 'Fail'
+                    elif check_id in relevant_checks:
+                        # Should have been checked but missing data
+                        param_row[check_id] = 'N/A'
+                    else:
+                        # Not applicable for this subdomain type
+                        param_row[check_id] = 'Not Applicable'
+
+                all_params_data.append(param_row)
+
+            df_all_params = pd.DataFrame(all_params_data)
+            df_all_params.to_excel(
+                writer, sheet_name='All Parameters', index=False)
+            print(
+                f"  ✅ All Parameters sheet created ({len(all_params_data)} subdomains)")
+
+            # NEW SHEET 2: Data Collection Evidence
+            # Shows what was actually tested vs what was skipped
+            print("\n  📋 Creating data collection evidence sheet...")
+            evidence_data = []
+
+            for result in results_list:
+                subdomain = result['Subdomain']
+                sub_type = result['Type']
+                all_checks_dict = result.get('all_checks_dict', {})
+                relevant_checks = result.get('relevant_checks_list', [])
+
+                # Count checks by status
+                passed_count = sum(1 for v in all_checks_dict.values() if v)
+                failed_count = sum(
+                    1 for v in all_checks_dict.values() if not v)
+                total_checked = len(all_checks_dict)
+                not_applicable = max(len(CHECKS) - len(relevant_checks), 0)
+
+                evidence_row = {
+                    'Subdomain': subdomain,
+                    'Type': sub_type,
+                    'Scan_Success': 'Yes' if result['Scan_Success'] else 'No',
+                    'Total_Score': result['Total_Score'],
+                    'Risk_Rating': result['Risk_Rating'],
+                    'Checks_Performed': total_checked,
+                    'Checks_Passed': passed_count,
+                    'Checks_Failed': failed_count,
+                    'Relevant_Checks': len(relevant_checks),
+                    'Not_Applicable': not_applicable,
+                    'Coverage_%': round((total_checked / len(relevant_checks) * 100) if len(relevant_checks) > 0 else 0, 1)
+                }
+
+                evidence_data.append(evidence_row)
+
+            df_evidence = pd.DataFrame(evidence_data)
+            df_evidence.to_excel(
+                writer, sheet_name='Data Collection Evidence', index=False)
+            print(
+                f"  ✅ Data Collection Evidence sheet created ({len(evidence_data)} subdomains)")
+
+            # NEW SHEET 3: Parameter Coverage Summary
+            # Shows which parameters were checked across all subdomains
+            print("\n  📋 Creating parameter coverage summary...")
+            param_coverage_data = []
+
+            for check_id in sorted(CHECKS.keys()):
+                check_info = CHECKS[check_id]
+
+                # Count across all subdomains
+                total_subdomains = len(results_list)
+                checked_count = 0
+                passed_count = 0
+                failed_count = 0
+                not_applicable_count = 0
+
+                for result in results_list:
+                    all_checks_dict = result.get('all_checks_dict', {})
+                    relevant_checks = result.get('relevant_checks_list', [])
+
+                    if check_id in all_checks_dict:
+                        checked_count += 1
+                        if all_checks_dict[check_id]:
+                            passed_count += 1
+                        else:
+                            failed_count += 1
+                    elif check_id not in relevant_checks:
+                        not_applicable_count += 1
+
+                param_coverage_data.append({
+                    'Control_ID': check_id,
+                    'Priority': check_info['priority'],
+                    'Description': check_info['desc'],
+                    'Total_Subdomains': total_subdomains,
+                    'Checked': checked_count,
+                    'Passed': passed_count,
+                    'Failed': failed_count,
+                    'Not_Applicable': not_applicable_count,
+                    'Pass_Rate_%': round((passed_count / checked_count * 100) if checked_count > 0 else 0, 1)
+                })
+
+            df_param_coverage = pd.DataFrame(param_coverage_data)
+            df_param_coverage.to_excel(
+                writer, sheet_name='Parameter Coverage Summary', index=False)
+            print(
+                f"  ✅ Parameter Coverage Summary sheet created ({len(param_coverage_data)} parameters)")
+
+            # NEW SHEET: Standards Scores
+            print("\n  📋 Creating standards score sheet...")
+            # Build aggregate pass rates per check across all subdomains
+            pass_counts = {cid: 0 for cid in CHECKS.keys()}
+            check_counts = {cid: 0 for cid in CHECKS.keys()}
+            for result in results_list:
+                all_checks_dict = result.get('all_checks_dict', {})
+                for cid, passed in all_checks_dict.items():
+                    if cid in check_counts:
+                        check_counts[cid] += 1
+                        if passed:
+                            pass_counts[cid] += 1
+
+            def check_pass_rate(cid):
+                total = check_counts.get(cid, 0)
+                return (pass_counts.get(cid, 0) / total) if total > 0 else 0.0
+
+            standards_rows = []
+            for std_name, std_checks in STANDARDS.items():
+                # Only include checks that exist
+                valid_checks = [c for c in std_checks if c in CHECKS]
+                if not valid_checks:
+                    continue
+                rates = [check_pass_rate(c) for c in valid_checks]
+                score_pct = round((sum(rates) / len(rates)) * 100, 1)
+                standards_rows.append({
+                    'Standard': std_name,
+                    'Controls_Mapped': len(valid_checks),
+                    'Score_%': score_pct
+                })
+            df_standards = pd.DataFrame(standards_rows)
+            df_standards.to_excel(
+                writer, sheet_name='Standards Scores', index=False)
+            print(
+                f"  ✅ Standards Scores sheet created ({len(standards_rows)} standards)")
+
         print(f"\n✅ Results saved to: {output_path}")
 
         if discovery_stats:
@@ -2023,18 +2571,25 @@ Output:
             print(f"  • WEBAPP/API/STATIC/OTHER Rankings (sorted by security score)")
             print(f"  • Discovery Stats (subdomain discovery metrics)")
             print(f"  • Technologies (detected tech stack per subdomain)")
-            print(f"  • Checklist (all 106 security parameters)")
-            print(f"\n🎯 New Features:")
-            print(f"  ✅ All 106 parameters now included in scoring")
-            print(f"  ✅ Context-aware weights (different for webapp/api/static/other)")
-            print(f"  ✅ Risk rating column (Critical/High/Medium/Low)")
-            print(f"  ✅ Separate ranking sheets by subdomain type")
-            print(f"  • Checklist (all 106 security controls)")
+            print("  • Checklist (all security parameters)")
+            print(f"  • All Parameters (comprehensive evidence sheet)")
+            print(f"  • Data Collection Evidence (what was tested)")
+            print(f"  • Parameter Coverage Summary (pass/fail rates per check)")
+            print(f"\n🎯 Key Features for Defense:")
+            print(
+                f"  ✅ All parameters for EVERY subdomain (Pass/Fail/Not Applicable)")
+            print(f"  ✅ Data collection evidence (proves what was scanned)")
+            print(f"  ✅ Parameter coverage summary (shows overall security posture)")
+            print(f"  ✅ Context-aware scoring (fair comparison by type)")
+            print(f"  ✅ Risk ratings to prioritize remediation")
         else:
             print(f"\n📊 Report includes:")
             print(f"  • Security Results")
             print(f"  • Summary By Type")
             print(f"  • Checklist")
+            print(f"  • All Parameters (comprehensive evidence sheet)")
+            print(f"  • Data Collection Evidence (what was tested)")
+            print(f"  • Parameter Coverage Summary (pass/fail rates per check)")
 
         print()
         print("Summary By Type:")

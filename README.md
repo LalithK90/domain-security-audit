@@ -1,8 +1,11 @@
 # Subdomain Security Scanner & Auditor
 
+> 🚨 NEW: All-Parameters Evidence + Standards Scores — full Pass/Fail evidence for every control, plus per-standard scoring (ISO 27034, NIST 800-53, PSD2, HIPAA, PCI-DSS v4.0, OWASP Top 10).  
+> 📊 **[Scoring Guide →](SCORING_GUIDE.md)**
+
 **Universal Comprehensive Subdomain Security Assessment Toolkit**
 
-An ultra-simple Python security scanner - just provide a domain name! Automatically discovers all subdomains, tests both www and non-www variants, and generates comprehensive 106-parameter security reports. Works with any TLD (.com, .org, .edu, .gov, .ac.lk, etc.).
+An ultra-simple Python security scanner - just provide a domain name! Automatically discovers all subdomains, tests both www and non-www variants, and generates comprehensive, OWASP-aligned security reports with **complete evidence collection** and a separate **Standards Scores** sheet. Works with any TLD (.com, .org, .edu, .gov, .ac.lk, etc.).
 
 **No file upload needed - just:**
 ```bash
@@ -22,15 +25,50 @@ pip install -r requirements.txt
 # 2. Run with just your domain name
 python security_scanner.py example.com
 
-# 3. Open the generated Excel report (7 sheets)
-# File: example.com_security_report.xlsx
+# 3. Open the generated Excel report (multiple sheets)
+# File: example.com_security_report.xlsx (includes Standards Scores)
 ```
 
 **That's it!** The script automatically:
 - 🔍 Discovers 99% of subdomains using 18,991 smart patterns
 - 🔧 Detects technologies (servers, CMS, frameworks, languages)
-- 🔒 Performs 106-parameter security assessment
-- 📊 Generates 7-sheet Excel report with separate Active/Inactive sheets, Discovery Stats, and Technologies
+- 🔒 Performs 106-parameter security assessment with **complete evidence collection**
+- 📊 Generates comprehensive Excel report with **13+ sheets** including full parameter tracking
+
+---
+
+## 🆕 What's New
+
+Latest version adds comprehensive evidence and compliance reporting:
+
+### Evidence & Coverage Sheets
+1. **All Parameters** - Complete Pass/Fail matrix for every subdomain and every control
+2. **Data Collection Evidence** - Proof of comprehensive testing (coverage % per subdomain)
+3. **Parameter Coverage Summary** - System-wide pass/fail rates per control
+
+### Compliance & Standards
+- **Standards Scores** sheet with per-standard scores across: ISO 27034, NIST SP 800-53 Rev 5, PSD2 (RTS on SCA & CSC), HIPAA (Security Rule), PCI-DSS v4.0, OWASP Top 10 (2021)
+- Optional organizational **evidence JSON** to award compliance/program controls (embedded schema in `security_scanner.py` as `SAMPLE_EVIDENCE_JSON`)
+
+### Why This Matters
+- Before: Summary scores only — hard to defend findings
+- After: Full Pass/Fail evidence per control — bulletproof documentation you can audit and explain
+- Impact: Prove every finding with granular data and show compliance posture per standard
+
+### Quick Start with New Features
+```bash
+# Test first (30 seconds, 3 subdomains)
+python test_scanner.py
+
+# Full scan with complete evidence (2-3 hours)
+python security_scanner.py ac.lk
+
+# Interactive menu
+./quickstart.sh
+```
+
+� **[Scoring Guide](SCORING_GUIDE.md)** - Scoring details and methodology
+🧪 Evidence schema: see `SAMPLE_EVIDENCE_JSON` in `security_scanner.py`
 
 ---
 
@@ -105,7 +143,7 @@ This repository provides an **ultra-simple, yet comprehensive Python security sc
 - ✅ **www/non-www variants** - Tests both versions automatically
 - ✅ **Smart detection** - Auto-detects if input is domain or file
 
-### Context-Aware Security Assessment (106 Parameters)
+### Context-Aware Security Assessment (All Parameters)
 - ✅ **Intelligent subdomain classification**: webapp, api, static, or other
 - ✅ **Adaptive check selection**: Each type gets only relevant security controls
   - **webapp**: All 106 checks (full application security)
@@ -177,7 +215,7 @@ cd ac-lk-network-audit
 ```
 
 ### 2. Create Virtual Environment (Recommended)
-clea```bash
+```bash
 python3 -m venv venv
 source venv/bin/activate  # On macOS/Linux
 # venv\Scripts\activate  # On Windows
@@ -212,7 +250,7 @@ python security_scanner.py university.edu
 python security_scanner.py company.ac.lk
 python security_scanner.py government.gov
 
-# That's it! Automatically generates: example.com_security_report.xlsx
+# That's it! Automatically generates: example.com_security_report.xlsx (with Standards Scores)
 ```
 
 **What happens automatically:**
@@ -244,7 +282,7 @@ python security_scanner.py
 
 ---
 
-## � Interactive Dashboard
+## 🧭 Interactive Dashboard
 
 After running the security scanner, visualize your results with the **interactive web-based dashboard**!
 
@@ -325,11 +363,11 @@ git push origin master
 - **User Guide**: [`docs/DASHBOARD_README.md`](docs/DASHBOARD_README.md) - Complete usage instructions
 - **Technical Docs**: [`docs/DASHBOARD_ENHANCEMENTS.md`](docs/DASHBOARD_ENHANCEMENTS.md) - Implementation details
 
-**Live Demo:** [View Dashboard Features](https://lalithk90.github.io/Subdomain_Security_Scanner_and_Auditor/dashboard.html)
+Open `dashboard.html` locally or host it on GitHub Pages (Settings → Pages).
 
 ---
 
-## �📖 Detailed Usage
+## 📖 Detailed Usage
 
 ### Unified Scanner with Built-in Enumeration
 
@@ -818,9 +856,9 @@ The scanner intelligently classifies each subdomain into one of four types, appl
 
 **Why This Matters:** Context-aware scoring ensures fair comparison. An API endpoint isn't penalized for lacking form-based CSRF tokens it doesn't need, and a static site isn't marked insecure for missing session management features it doesn't have.
 
-### 106-Parameter Security Assessment Table
+### Security Assessment Table (representative)
 
-Below is the **complete table** of all 106 security parameters, including IDs, priorities, descriptions, feasibility with this stack, reference/standard, and direct links to resources:
+Below is a representative table of core security parameters. The actual control set has been expanded (OWASP + industry/compliance families). For the authoritative list used in your run, see the "Checklist" sheet and "All Parameters" sheet in your generated report.
 
 | # | Main Section | ID | Priority | Description | Feasible? | Reference/Standard | Link |
 |---|--------------|-----|----------|-------------|-----------|-------------------|------|
@@ -952,7 +990,7 @@ The scanner intelligently determines which checks apply to each subdomain:
 
 ---
 
-## 📊 Scoring Methodology
+## 📊 Scoring & Standards
 
 ### Context-Aware Dynamic Scoring
 
@@ -967,10 +1005,10 @@ Each subdomain is automatically classified into one of four types:
 
 **2. Relevant Check Selection**
 Only security controls applicable to each type are tested:
-- **webapp**: All 106 checks (full security suite)
-- **api**: 75+ checks (API-focused security)
-- **static**: 70+ checks (static content security)
-- **other**: 9 checks (DNS and subdomain security only)
+- **webapp**: Full web-application security control set
+- **api**: API-focused controls (authn/z, tokens, rate limiting, CORS)
+- **static**: Static site controls (TLS, headers, content integrity)
+- **other**: DNS and subdomain security only
 
 **3. Binary Scoring**
 Each relevant check receives:
@@ -1004,13 +1042,32 @@ The Excel report includes aggregate statistics by subdomain type:
 
 ---
 
+### Industry & Compliance Standards
+
+The report includes a dedicated "Standards Scores" sheet that shows your estimated conformance across:
+- **ISO 27034** - Application security
+- **NIST SP 800-53 Rev 5** - Security and privacy controls for systems and organizations
+- **PSD2 (RTS on SCA & CSC)** - Payment services directive strong customer authentication
+- **HIPAA (Security Rule)** - Health information privacy and security
+- **PCI-DSS v4.0** - Payment card industry data security
+- **OWASP Top 10 (2021)** - Web application security risks
+
+**How it works:**
+- Each standard maps to a set of controls checked by the scanner
+- We aggregate pass rates across those controls to compute a percentage
+- If you provide an organizational evidence JSON (optional), additional program/compliance controls are scored
+
+**Optional evidence JSON (org-level):** Pass `--evidence my_evidence.json` to include organizational program controls. See `SAMPLE_EVIDENCE_JSON` embedded in `security_scanner.py` for the exact schema.
+
+---
+
 ## 📁 Output Files
 
-### Primary Output: `website_ranking.xlsx`
+### Primary Output: `{domain}_security_report.xlsx`
 
-The scanner generates a comprehensive Excel workbook with **five sheets**:
+The scanner generates a comprehensive Excel workbook with multiple sheets (key ones listed below):
 
-#### Sheet 1: Security Results
+#### Security Results
 Detailed table of all scanned subdomains and variants:
 
 | Column | Description |
@@ -1031,7 +1088,7 @@ api.example.com         api     True          76.30        Yes         Yes      
 static.example.com      static  True          82.10        Yes         Yes          Yes         ...
 ```
 
-#### Sheet 2: Summary By Type
+#### Summary By Type
 Aggregate statistics for each subdomain classification:
 
 | Column | Description |
@@ -1052,7 +1109,7 @@ static  12     79.45      81.20         91.50      62.00
 other   6      55.20      56.30         78.00      32.10
 ```
 
-#### Sheet 3: Discovery Stats
+#### Discovery Stats
 Comprehensive subdomain discovery statistics:
 
 | Metric | Description |
@@ -1067,7 +1124,7 @@ Comprehensive subdomain discovery statistics:
 | **Top Frameworks** | Most common frameworks |
 | **Top Languages** | Most common programming languages |
 
-#### Sheet 4: Technologies
+#### Technologies
 Technology stack detected for each subdomain:
 
 | Column | Description |
@@ -1089,7 +1146,7 @@ portal.example.com webapp  Nginx   WordPress  Laravel        React     PHP      
 api.example.com    api     Apache  -          Django         -         Python     AWS
 ```
 
-#### Sheet 5: Checklist
+#### Checklist
 Complete reference of all 106 security controls:
 
 | Column | Description |
@@ -1106,6 +1163,18 @@ CERT-1      High      Valid cert chain
 CSP-1       Medium    CSP present (non-empty)
 DNS-1       Low       DNSSEC (DS records)
 ```
+
+#### All Parameters (Evidence)
+Complete Pass/Fail/Not Applicable matrix for every control and subdomain.
+
+#### Data Collection Evidence
+Proof of coverage per subdomain: how many checks were applicable/run/passed/failed.
+
+#### Parameter Coverage Summary
+Pass/fail and applicability counts for each control across all subdomains.
+
+#### Standards Scores
+Per-standard compliance posture computed from mapped controls.
 
 ---
 
@@ -1126,30 +1195,24 @@ DNS-1       Low       DNSSEC (DS records)
 
 ---
 
-## � Project Structure
+## 🗂️ Project Structure
 
 ```
 ac-lk-network-audit/
-├── security_scanner.py              # Main security scanner with 99% subdomain discovery
-├── dashboard.html                   # Interactive web dashboard for visualization
-├── requirements.txt                 # Python dependencies
-├── README.md                        # Main documentation (this file)
-│
-├── docs/                           # Documentation folder
-│   ├── DASHBOARD_README.md         # Dashboard user guide and deployment
-│   └── DASHBOARD_ENHANCEMENTS.md   # Technical implementation details
-│
-├── backup/                         # Backup files (git-ignored)
-│   └── dashboard.html.backup       # Previous dashboard version
-│
-└── performance_comparison.py       # Benchmarking tool for optimization testing
+├── security_scanner.py       # Main scanner (99% discovery + evidence + standards)
+├── dashboard.html            # Interactive web dashboard (client-side)
+├── requirements.txt          # Python dependencies
+├── SCORING_GUIDE.md          # Detailed scoring methodology
+├── README.md                 # Main documentation (this file)
+├── test_scanner.py           # Quick smoke test (optional)
+└── performance_comparison.py # Benchmarking tool (optional)
 ```
 
 ### 📄 File Descriptions
 
 | File | Description | Purpose |
 |------|-------------|---------|
-| `security_scanner.py` | Complete security scanner | Subdomain discovery + 106-parameter assessment |
+| `security_scanner.py` | Complete security scanner | 99% discovery + OWASP-aligned assessment + evidence + standards |
 | `dashboard.html` | Interactive web dashboard | Visualize Excel reports with filters & exports |
 | `requirements.txt` | Python dependencies | Install with `pip install -r requirements.txt` |
 | `performance_comparison.py` | Benchmarking tool | Test openpyxl optimization performance |
@@ -1179,18 +1242,16 @@ python security_scanner.py university.edu
 # No filename conflicts when running multiple scans!
 ```
 
-**Excel Structure (5 Sheets):**
-1. **Security Results** - All 106 parameters per subdomain
-2. **Active Subdomains** - HTTP/HTTPS responsive subdomains only
-3. **Inactive Subdomains** - DNS-only (not web-accessible)
-4. **Summary By Type** - Statistics grouped by type (webapp/api/static/other)
-5. **Discovery Stats** - Enumeration metrics and technology detection
-6. **Technologies** - Detected servers, CMS, frameworks, languages
-7. **Checklist** - Complete list of 106 security controls
+**Excel Structure (high level):**
+1. **Security Results** — scores, risk, type, and per-check pass columns
+2. **Active/Inactive Subdomains**, **Summary By Type**, **Rankings**
+3. **Discovery Stats**, **Technologies**, **Checklist**
+4. **All Parameters**, **Data Collection Evidence**, **Parameter Coverage Summary**
+5. **Standards Scores**
 
 ---
 
-## �🔬 Research Use Cases & Data Analysis
+## 🔬 Research Use Cases & Data Analysis
 
 ### 1. Comparative Domain Security Analysis
 ```python
@@ -1511,6 +1572,9 @@ python security_scanner.py subdomains.txt  # Same thing, shorter
 
 # Interactive mode (prompts you)
 python security_scanner.py
+
+# Include org evidence for standards/program scoring (optional)
+python security_scanner.py example.com --evidence my_evidence.json
 ```
 
 ### What Gets Generated
