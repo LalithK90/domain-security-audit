@@ -54,3 +54,5 @@ backup/
 docs/
 
 
+*.pid
+*.log
