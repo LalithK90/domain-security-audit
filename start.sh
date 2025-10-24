@@ -80,8 +80,8 @@ echo "Logs: $AC_LOG, $GOV_LOG"
 echo ""
 
 # Run scans in background
-nohup python security_scanner.py ac.lk --output ac.lk_security_report.xlsx > "$AC_LOG" 2>&1 &
-AC_PID=$!
+# nohup python security_scanner.py ac.lk --output ac.lk_security_report.xlsx > "$AC_LOG" 2>&1 &
+# AC_PID=$!
 
 nohup python security_scanner.py gov.lk --output gov.lk_security_report.xlsx > "$GOV_LOG" 2>&1 &
 GOV_PID=$!
