@@ -777,36 +777,41 @@
         
         // Wait for DOM to load before initializing
         document.addEventListener('DOMContentLoaded', function() {
-         e                ne();
+            initializeUploadZone();
         });
         
-        function initial            dZone() {
-                   Upload zone interactio                   const uploadZ            cument.getElementById('            ne');
-            const fi            = document.getElementById('fileInput');
+            function initializeUploadZone () {
+                // Upload zone interactions
+                const uploadZone = document.getElementById('uploadZone');
+                const fileInput = document.getElementById('fileInput');
             
-            if (!uploadZone |n                           console.error('Upload elements not found');
+            if (!uploadZone || !fileInput) {
+                console.error('Upload elements not found');
                 return;
             }
-             
-                     ploadZone.addEventListen                k',                         console.log('Clicking  file                                  fileInput.click                        });
+
+            uploadZone.addEventListener('click', () => {
+                console.log('Clicking file input');
+                fileInput.click();
+            });
             
             uploadZone.addEventListener('dragover', (e) => {
                 e.preventDefault();
-        adZone.classList.add('dragover');
+                uploadZone.classList.add('dragover');
             });
-                
+
             uploadZone.addEventListener('dragleave', () => {
-                uploList.remove('dragover');
+                uploadZone.classList.remove('dragover');
             });
             
             uploadZone.addEventListener('drop', (e) => {
                 e.preventDefault();
-              .classList.remove('dragover');
+                uploadZone.classList.remove('dragover');
                 
                 const file = e.dataTransfer.files[0];
                 if (file) {
                     handleFile(file);
-    }
+                }
             });
             
             fileInput.addEventListener('change', (e) => {
@@ -947,7 +952,7 @@
             currentData = jsonData;
             
             // Detect sheet type and configure UI
-  ewMode = detectSheetType(jsonData, sheetName);
+            viewMode = detectSheetType(jsonData, sheetName);
             updateSheetGuide(viewMode);
             configureFilterVisibility(viewMode);
             

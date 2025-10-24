@@ -1799,12 +1799,37 @@ def compute_scores(all_checks, subdomain_type='other'):
     weights = CONTEXT_WEIGHTS.get(subdomain_type, {})
 
     for cat, info in CATEGORIES.items():
-        cat_checks = [all_checks.get(check, False) for check in info['checks']]
+        # Gather raw check results for the category
+        raw_checks = [all_checks.get(check, None) for check in info['checks']]
 
-        if cat_checks:
+        # Normalize values to numeric 1 (pass) / 0 (fail) and skip unknowns
+        normalized = []
+        for v in raw_checks:
+            # Treat None or missing as unknown -> skip from denominator
+            if v is None:
+                continue
+            # Booleans
+            if isinstance(v, bool):
+                normalized.append(1 if v else 0)
+                continue
+            # Numbers (non-zero => pass)
+            if isinstance(v, (int, float)):
+                normalized.append(1 if v > 0 else 0)
+                continue
+            # Strings (support common truthy/falsey forms)
+            if isinstance(v, str):
+                s = v.strip().lower()
+                if s in {"true", "yes", "pass", "passed", "ok", "y", "1"}:
+                    normalized.append(1)
+                elif s in {"false", "no", "fail", "failed", "n", "0"}:
+                    normalized.append(0)
+                # else: unknown string -> skip
+                continue
+
+        if normalized:
             # Use context-aware weight or fall back to default weight
             weight = weights.get(cat, info['weight'])
-            cat_score = (sum(cat_checks) / len(cat_checks)) * weight
+            cat_score = (sum(normalized) / len(normalized)) * weight
             scores[cat] = round(cat_score, 2)
             total_score += cat_score
 
