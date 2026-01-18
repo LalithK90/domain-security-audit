@@ -50,54 +50,49 @@ bash start.sh google.com github.com example.com
 
 ## 📚 Documentation
 
-All documentation organized in `/docs` folder for clean workspace:
+**Single comprehensive guide:**
+- **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** - Complete documentation including:
+  - Quick start
+  - System architecture
+  - Queue management
+  - Master tracker usage
+  - Performance tuning
+  - Troubleshooting
+  - FAQ
 
-- **[QUEUE_GUIDE.md](docs/QUEUE_GUIDE.md)** - Complete how-to guide
-- **[QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** - Command reference  
-- **[IMPLEMENTATION_SUMMARY.md](docs/IMPLEMENTATION_SUMMARY.md)** - Technical details
-- **[SYSTEM_EVOLUTION.md](docs/SYSTEM_EVOLUTION.md)** - v2.0 vs v3.0 comparison
-- **[INDEX.md](docs/INDEX.md)** - Full documentation index
+**Additional resources:**
+- **[queue/README.md](queue/README.md)** - Queue system commands
 
 ---
 
 ## 📁 Project Structure
 
 ```
-.
-├── src/                    Core modules
-│   ├── security_scanner.py (2,821 lines - main engine)
-│   ├── security_dashboard.py
-│   └── __init__.py
-│
-├── tools/                  Utilities
-│   ├── scan_ssl_async.py
-│   ├── test_scanner.py
-│   └── __init__.py
-│
-├── docs/                   📚 Documentation (8 files)
-│   ├── 01_GETTING_STARTED.md
-│   ├── 02_QUICK_REFERENCE.md
 lk-public-domain-security-audit/
 ├── 📄 README.md                    ← Start here
 ├── 📄 requirements.txt             Dependencies
-├── 🔧 start.sh                     ← Main script (interactive/batch)
-├── 🐍 domain_queue_manager.py      Queue state management
-├── 📊 domain_queue.json            Persistent queue (auto-created)
+├── 🔧 start.sh                     Main orchestrator
 │
-├── 📚 docs/                        Documentation (organized)
-│   ├── QUEUE_GUIDE.md              Complete how-to
-│   ├── QUICK_REFERENCE.md          Commands & examples
-│   ├── IMPLEMENTATION_SUMMARY.md    Architecture & technical
-│   └── SYSTEM_EVOLUTION.md         v2.0 vs v3.0 comparison
+├── 📁 queue/                       Queue management system
+│   ├── domain_queue_manager.py    Queue operations
+│   ├── domain_queue.json          Persistent state
+│   ├── master_tracker.py          Excel tracker
+│   └── README.md                  Queue commands
 │
-├── 🔍 src/                         Scanner & dashboard code
-│   ├── security_scanner.py         Main security tests
-│   └── security_dashboard.py       Web interface
+├── 📁 src/                        Scanner code
+│   └── security_scanner.py        106 security checks
 │
-├── 🧰 tools/                       Utilities
-│   ├── scan_ssl_async.py           SSL testing
-│   └── test_scanner.py             Validation tests
+├── 📁 docs/                       Documentation
+│   └── USER_GUIDE.md              Complete guide
 │
+├── 📁 reports/                    Output (created at runtime)
+│   ├── master_tracker.xlsx        Consolidated tracker
+│   └── scans/YYYY-MM-DD/          Individual reports
+│       └── HH-MM-SS/
+│           └── *.xlsx
+│
+└── 📁 tests/                      Test suite
+```
 ├── 📋 reports/                     Output directory (created at runtime)
 │   ├── scans/YYYY-MM-DD/           Timestamped reports
 │   │   └── HH-MM-SS/
@@ -198,12 +193,29 @@ python domain_queue_manager.py complete google.com
 
 ---
 
+## � Documentation
+
+**Single comprehensive guide:**
+- **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** - Complete documentation including:
+  - Quick start
+  - System architecture
+  - Queue management
+  - Master tracker usage
+  - Performance tuning
+  - Troubleshooting
+  - FAQ
+
+**Additional resources:**
+- **[queue/README.md](queue/README.md)** - Queue system commands
+
+---
+
 ## 🚀 Next Steps
 
-1. **First Time?** → Read [Getting Started](docs/01_GETTING_STARTED.md)
-2. **Need Help?** → Check [Quick Reference](docs/02_QUICK_REFERENCE.md)
-3. **Want Details?** → See [Features Guide](docs/03_FEATURES.md)
-4. **Understand Architecture?** → Read [Workflow](docs/04_WORKFLOW.md)
+1. **Quick Start** → Run `bash start.sh`
+2. **Check Queue** → `python queue/domain_queue_manager.py status`
+3. **View Results** → Open `reports/master_tracker.xlsx`
+4. **Read Guide** → See [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 
 ---
 
@@ -211,30 +223,33 @@ python domain_queue_manager.py complete google.com
 
 **"How do I run the scanner?"**
 ```bash
-./start.sh
+bash start.sh
 ```
 
 **"Where are my reports?"**
-→ `reports/scans/YYYY-MM-DD/HH-MM-SS/`
+- Master tracker: `reports/master_tracker.xlsx`
+- Individual reports: `reports/scans/YYYY-MM-DD/HH-MM-SS/`
 
-**"How do I compare runs?"**
-→ Dashboard → "Compare Runs" tab → Select 2 runs
+**"How do I check progress?"**
+```bash
+python queue/domain_queue_manager.py status
+python queue/master_tracker.py summary
+```
 
 **"Where's the documentation?"**
-→ Check `/docs` folder (8 organized files)
+→ [docs/USER_GUIDE.md](docs/USER_GUIDE.md) - All-in-one guide
 
 ---
 
-## ✨ What's New in v2.0
+## ✨ What's New in v3.0
 
-✅ Organized code structure (src/, tools/, tests/)  
-✅ Automated setup & execution (single command)  
-✅ Timestamped reports (never overwrites)  
-✅ Historical run tracking  
-✅ Web dashboard with 4 tabs  
-✅ Duration estimation before scan  
-✅ Full metadata & audit trail  
-✅ Cross-platform support  
+✅ **Queue-based sequential processing** (low memory, resumable)  
+✅ **Master Excel tracker** (consolidated view of all scans)  
+✅ **M1 Mac optimization** (500 concurrent threads)  
+✅ **Auto-subdomain queueing** (discovered subdomains added automatically)  
+✅ **Dual reporting** (master tracker + individual detailed reports)  
+✅ **Persistent state** (JSON queue survives interruptions)  
+✅ **Organized structure** (queue/, src/, docs/ folders)  
 
 ---
 
@@ -259,7 +274,6 @@ Optional (auto-installed):
 
 ---
 
-**Version**: 2.0 | **Status**: Production Ready  
-**Start**: `./start.sh` | **Dashboard**: http://localhost:8000  
-
-See [docs/INDEX.md](docs/INDEX.md) for complete documentation index.
+**Version**: 3.0 (Queue-Based Sequential Processing)  
+**Status**: Production Ready  
+**Start**: `bash start.sh` | **Docs**: [USER_GUIDE.md](docs/USER_GUIDE.md)

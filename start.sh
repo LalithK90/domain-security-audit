@@ -116,6 +116,43 @@ setup_output_dir() {
 }
 
 # ============================================================================
+# 4.1 LOAD CONFIGURATION
+# ============================================================================
+load_config() {
+    section "⚙️ Loading Configuration"
+    local CONFIG_FILE="$SCRIPT_DIR/config.env"
+    if [ -f "$CONFIG_FILE" ]; then
+        set -a
+        . "$CONFIG_FILE"
+        set +a
+        info "Config loaded from: $CONFIG_FILE"
+    else
+        warn "No config.env found; using defaults"
+    fi
+    WORKERS="${WORKERS:-500}"
+    RATE_LIMIT="${RATE_LIMIT:-0}"
+    TIMEOUT="${TIMEOUT:-10}"
+    DOMAIN_WORKERS="${DOMAIN_WORKERS:-1}"
+}
+
+# ============================================================================
+# 4.2 RAISE SYSTEM LIMITS (macOS)
+# ============================================================================
+raise_limits() {
+    section "🚀 Raising System Limits"
+    if [ "$OS" = "macos" ]; then
+        local CURRENT
+        CURRENT=$(ulimit -n || echo 256)
+        info "Current file descriptor limit: $CURRENT"
+        if ulimit -n 65535 2>/dev/null; then
+            info "Raised file descriptor limit to 65535"
+        else
+            warn "Could not raise file-descriptor limit; consider adjusting launchctl/sysctl"
+        fi
+    fi
+}
+
+# ============================================================================
 # 5. DOMAIN INPUT - Interactive or from arguments
 # ============================================================================
 
@@ -163,12 +200,14 @@ process_queue() {
             eval "$(conda shell.bash hook)" && conda activate security_audit_env 2>/dev/null || true
         fi
         
-        # Run scanner for this domain (M1 Mac optimized: 500 workers, no rate limit)
+        # Run scanner for this domain with tuned configuration
         if python "$SCRIPT_DIR/src/security_scanner.py" \
             --domain "$NEXT_DOMAIN" \
             --output-dir "$REPORT_DIR" \
-            --workers 500 \
-            --rate-limit 0; then
+            --workers "${WORKERS}" \
+            --rate-limit "${RATE_LIMIT}" \
+            --timeout "${TIMEOUT}" \
+            --domain-workers "${DOMAIN_WORKERS}"; then
             
             # Mark as completed
             python "$SCRIPT_DIR/queue/domain_queue_manager.py" complete "$NEXT_DOMAIN"
@@ -224,6 +263,10 @@ main() {
     check_prerequisites
     setup_environment
     setup_output_dir
+
+    # Load configuration and raise system limits early
+    load_config
+    raise_limits
     
     # Initialize master tracker before processing
     python "$SCRIPT_DIR/queue/master_tracker.py" init
