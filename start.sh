@@ -1,154 +1,239 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
-# Automated Security Scanner Runner
-# Simple POSIX-compatible version
+# ============================================================================
+# Security Scanner Orchestrator v3.0 - Queue-Based Sequential Processing
+# ============================================================================
+# Features:
+# - Interactive domain input with JSON queue storage
+# - Sequential domain processing (one at a time)
+# - Excel report generated per domain completion
+# - Low memory usage (no batch processing)
+# - OS detection (macOS, Linux, Windows)
+# - Timestamped report storage
+# ============================================================================
 
-set -e
+set -euo pipefail
 
-echo "======================================================================"
-echo "Security Scanner - Starting"
-echo "======================================================================"
-echo ""
-
-# Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ====================================================================
-# STEP 1: Git Pull
-# ====================================================================
-echo "[Step 1/3] Checking for updates from GitHub..."
-git fetch origin > /dev/null 2>&1
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/master)
+# Logging
+log() { printf "%b\n" "$*"; }
+section() { log "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"; log "$*"; log "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"; }
+info() { log "${GREEN}✓${NC} $*"; }
+warn() { log "${YELLOW}⚠${NC} $*"; }
+err() { log "${RED}✗${NC} $*"; exit 1; }
 
-if [ "$LOCAL" != "$REMOTE" ]; then
-    echo "           Updates found. Pulling..."
-    git pull origin master > /dev/null 2>&1
-    echo "           Done."
-else
-    echo "           Already up to date."
-fi
-echo ""
+# ============================================================================
+# 1. OS DETECTION
+# ============================================================================
 
-# ====================================================================
-# STEP 2: Python Environment
-# ====================================================================
-echo "[Step 2/3] Setting up Python environment..."
+detect_os() {
+    case "$(uname -s)" in
+        Darwin*)  echo "macos" ;;
+        Linux*)   echo "linux" ;;
+        MINGW*|MSYS*) echo "windows" ;;
+        *) echo "unknown" ;;
+    esac
+}
 
-VENV_DIR="venv"
+OS=$(detect_os)
 
-if [ -d "$VENV_DIR" ]; then
-    echo "           Virtual environment found."
-else
-    echo "           Creating new virtual environment..."
-    python3 -m venv "$VENV_DIR"
+section "🖥️  System Detection"
+info "OS detected: $(echo $OS | tr '[:lower:]' '[:upper:]')"
+
+# ============================================================================
+# 2. CHECK PREREQUISITES
+# ============================================================================
+
+check_prerequisites() {
+    section "📋 Checking Prerequisites"
     
-    . "$VENV_DIR/bin/activate"
+    if ! command -v python3 &>/dev/null; then
+        err "Python 3 not found. Please install Python 3.8+"
+    fi
+    PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+    info "Python $PYTHON_VERSION found"
+}
+
+# ============================================================================
+# 3. ENVIRONMENT SETUP
+# ============================================================================
+
+setup_environment() {
+    section "🔧 Setting Up Python Environment"
     
-    if [ -f "requirements.txt" ]; then
-        echo "           Installing dependencies..."
-        pip install --upgrade pip > /dev/null 2>&1
-        pip install -r requirements.txt > /dev/null 2>&1
+    if ! command -v conda &>/dev/null; then
+        warn "Conda not found - attempting to initialize..."
+        return 0
     fi
     
-    echo "           Environment created."
-fi
-
-# Activate environment
-. "$VENV_DIR/bin/activate"
-echo "           Environment activated."
-echo ""
-
-# ====================================================================
-# STEP 3: Run Scans
-# ====================================================================
-echo "[Step 3/3] Starting security scans in background..."
-echo ""
-
-TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-FILE_TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
-
-# Log files
-AC_LOG="ac_lk_scan_${FILE_TIMESTAMP}.log"
-GOV_LOG="gov_lk_scan_${FILE_TIMESTAMP}.log"
-MAIN_LOG="start_run_${FILE_TIMESTAMP}.log"
-
-echo "Starting scans for ac.lk and gov.lk..."
-echo "Logs: $AC_LOG, $GOV_LOG"
-echo ""
-
-# Run scans in background
-# nohup python security_scanner.py ac.lk --output ac.lk_security_report.xlsx > "$AC_LOG" 2>&1 &
-# AC_PID=$!
-
-nohup python security_scanner.py gov.lk --output gov.lk_security_report.xlsx > "$GOV_LOG" 2>&1 &
-GOV_PID=$!
-
-# Save PIDs
-echo "$AC_PID" > .ac_lk_scan.pid
-echo "$GOV_PID" > .gov_lk_scan.pid
-
-echo "Scans running in background:"
-echo "  - ac.lk  (PID: $AC_PID)"
-echo "  - gov.lk (PID: $GOV_PID)"
-echo ""
-echo "======================================================================"
-echo "Scans Started Successfully"
-echo "======================================================================"
-echo ""
-echo "The scans will take 2-3 hours to complete."
-echo "You can safely disconnect SSH now."
-echo ""
-echo "To check status later, run:"
-echo "  bash check_status.sh"
-echo ""
-echo "To view logs:"
-echo "  tail -f $AC_LOG"
-echo "  tail -f $GOV_LOG"
-echo ""
-
-# Continue monitoring in background
-(
-    # Wait for both scans
-    wait $AC_PID
-    AC_EXIT=$?
+    ENV_NAME="security_audit_env"
     
-    wait $GOV_PID
-    GOV_EXIT=$?
+    # Initialize conda if needed
+    if ! type conda &>/dev/null; then
+        eval "$(conda shell.bash hook)" 2>/dev/null || true
+    fi
     
-    # Log results
-    echo "" >> "$MAIN_LOG"
-    echo "Scan completed at: $(date '+%Y-%m-%d %H:%M:%S')" >> "$MAIN_LOG"
-    echo "ac.lk exit code: $AC_EXIT" >> "$MAIN_LOG"
-    echo "gov.lk exit code: $GOV_EXIT" >> "$MAIN_LOG"
+    # Create/activate environment
+    if conda env list | grep -q "$ENV_NAME"; then
+        info "Conda environment '$ENV_NAME' exists"
+    else
+        info "Creating conda environment '$ENV_NAME'..."
+        conda create -n "$ENV_NAME" python=3.11 -y >/dev/null 2>&1
+        info "Conda environment created"
+    fi
     
-    # If both successful, push to GitHub
-    if [ $AC_EXIT -eq 0 ] && [ $GOV_EXIT -eq 0 ]; then
-        cd "$SCRIPT_DIR"
+    info "Installing/updating dependencies..."
+    eval "$(conda shell.bash hook)" && conda activate "$ENV_NAME" && \
+        pip install -q -r "$SCRIPT_DIR/requirements.txt" && \
+        info "Dependencies ready"
+}
+
+# ============================================================================
+# 4. SETUP OUTPUT DIRECTORY
+# ============================================================================
+
+setup_output_dir() {
+    section "📁 Setting Up Output Directory"
+    
+    RUN_DATE=$(date +%Y-%m-%d)
+    RUN_TIME=$(date +%H-%M-%S)
+    RUN_TIMESTAMP=$(date +%Y-%m-%d\ %H:%M:%S)
+    
+    REPORT_DIR="$SCRIPT_DIR/reports/scans/${RUN_DATE}/${RUN_DATE}_${RUN_TIME}"
+    mkdir -p "$REPORT_DIR"
+    
+    info "Reports will be saved to: $REPORT_DIR"
+}
+
+# ============================================================================
+# 5. DOMAIN INPUT - Interactive or from arguments
+# ============================================================================
+
+get_domains() {
+    section "🔐 Domain Input"
+    
+    # If domains provided as arguments, use them
+    if [ $# -gt 0 ]; then
+        info "Using domains from command line: ${*}"
+        python "$SCRIPT_DIR/queue/domain_queue_manager.py" init "${@}"
+        return $?
+    fi
+    
+    # Otherwise, interactive input
+    log "\n${CYAN}Interactive Domain Input Mode${NC}"
+    log "Enter domain(s) to scan (one per line):"
+    log "  Examples: google.com, github.com, example.org"
+    log "  Type 'done' when finished\n"
+    
+    python "$SCRIPT_DIR/queue/domain_queue_manager.py"
+}
+
+# ============================================================================
+# 6. PROCESS DOMAIN QUEUE
+# ============================================================================
+
+process_queue() {
+    section "🔄 Processing Domain Queue"
+    
+    while true; do
+        # Get next domain
+        NEXT_DOMAIN=$(python "$SCRIPT_DIR/queue/domain_queue_manager.py" next)
         
-        if [ -n "$(git status --porcelain)" ]; then
-            git add ac.lk_security_report.xlsx gov.lk_security_report.xlsx
-            git add -A
-            git commit -m "$TIMESTAMP successfully run"
-            git push origin master
-            
-            echo "Results pushed to GitHub at: $(date '+%Y-%m-%d %H:%M:%S')" >> "$MAIN_LOG"
-            
-            # Clean up scan logs on success
-            rm -f "$AC_LOG" "$GOV_LOG"
+        if [ -z "$NEXT_DOMAIN" ]; then
+            info "All domains processed!"
+            break
         fi
         
-        # Clean up PID files
-        rm -f .ac_lk_scan.pid .gov_lk_scan.pid
-    else
-        echo "One or more scans failed. Check logs." >> "$MAIN_LOG"
+        log ""
+        info "Processing domain: $NEXT_DOMAIN"
+        info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        # Activate conda environment
+        if command -v conda &>/dev/null; then
+            eval "$(conda shell.bash hook)" && conda activate security_audit_env 2>/dev/null || true
+        fi
+        
+        # Run scanner for this domain (M1 Mac optimized: 500 workers, no rate limit)
+        if python "$SCRIPT_DIR/src/security_scanner.py" \
+            --domain "$NEXT_DOMAIN" \
+            --output-dir "$REPORT_DIR" \
+            --workers 500 \
+            --rate-limit 0; then
+            
+            # Mark as completed
+            python "$SCRIPT_DIR/queue/domain_queue_manager.py" complete "$NEXT_DOMAIN"
+            info "✅ Completed: $NEXT_DOMAIN"
+            
+            # Update master tracker queue status
+            python "$SCRIPT_DIR/queue/master_tracker.py" update-queue
+            
+            # Show queue status
+            STATUS=$(python "$SCRIPT_DIR/queue/domain_queue_manager.py" status)
+            info "Queue status: $(echo "$STATUS" | grep 'Remaining' | awk -F': ' '{print $2}')"
+        else
+            # Mark as failed
+            python "$SCRIPT_DIR/queue/domain_queue_manager.py" fail "$NEXT_DOMAIN" "scan_failed"
+            warn "❌ Failed: $NEXT_DOMAIN - continuing with next domain"
+        fi
+        
+        log ""
+    done
+}
+
+# ============================================================================
+# 7. SHOW FINAL REPORT
+# ============================================================================
+
+show_report() {
+    section "📊 Scan Summary"
+    
+    info "Reports saved to: $REPORT_DIR"
+    info ""
+    info "📋 Files generated:"
+    
+    if [ -d "$REPORT_DIR" ]; then
+        find "$REPORT_DIR" -maxdepth 1 -name "*.xlsx" -type f | while read f; do
+            basename "$f" | sed 's/^/   /'
+        done
     fi
-) >> "$MAIN_LOG" 2>&1 &
+    
+    info ""
+    info "View reports at:"
+    info "   $REPORT_DIR"
+    
+    # Show master tracker summary
+    info ""
+    python "$SCRIPT_DIR/queue/master_tracker.py" summary
+}
 
-echo "Background monitoring started."
-echo "Main log: $MAIN_LOG"
-echo ""
-echo "======================================================================"
+# ============================================================================
+# 8. MAIN EXECUTION
+# ============================================================================
 
+main() {
+    check_prerequisites
+    setup_environment
+    setup_output_dir
+    
+    # Initialize master tracker before processing
+    python "$SCRIPT_DIR/queue/master_tracker.py" init
+    
+    get_domains "${@}"
+    process_queue
+    show_report
+    
+    section "✅ SECURITY AUDIT COMPLETE"
+    info "All domains have been scanned and reports generated"
+}
+
+main "${@}"

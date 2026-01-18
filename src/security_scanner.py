@@ -1,31 +1,159 @@
-import pandas as pd
-import requests
-from bs4 import BeautifulSoup
+import argparse
+import concurrent.futures
+import json
+import random
+import re
+import socket
+import string
+import sys
+import time
+import warnings
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from tqdm import tqdm
-import time
-import re
-import sys
-import argparse
-import socket
-import json
-import concurrent.futures
-from typing import List, Set, Dict
-import string
-from openpyxl import load_workbook
-from sslyze import (
-    Scanner,
-    ServerScanRequest,
-    ServerNetworkLocation,
-    ScanCommand,
-    ServerConnectivityStatusEnum
-)
-from sslyze.errors import ConnectionToServerFailed
+from typing import Any, Dict, List, Optional, Set
+
+import pandas as pd
+import requests
 import dns.resolver
 from dns.exception import DNSException
-import warnings
+from bs4 import BeautifulSoup
+from sslyze import (
+    Scanner,
+    ScanCommand,
+    ServerConnectivityStatusEnum,
+    ServerNetworkLocation,
+    ServerScanRequest,
+)
+from sslyze.errors import ConnectionToServerFailed
+from tqdm import tqdm
+
 warnings.filterwarnings('ignore')
+
+
+# ==========================================================================
+# Status model
+# ==========================================================================
+
+STATUS_PASS = 'PASS'
+STATUS_FAIL = 'FAIL'
+STATUS_NOT_TESTED = 'NOT_TESTED'
+STATUS_NOT_APPLICABLE = 'NOT_APPLICABLE'
+STATUS_ERROR = 'ERROR'
+
+STATUS_LABELS = {
+    STATUS_PASS: 'Pass',
+    STATUS_FAIL: 'Fail',
+    STATUS_NOT_TESTED: 'Not Tested',
+    STATUS_NOT_APPLICABLE: 'Not Applicable',
+    STATUS_ERROR: 'Error'
+}
+
+
+@dataclass
+class CheckResult:
+    control_id: str
+    status: str
+    reason_code: Optional[str] = None
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    duration_ms: Optional[float] = None
+
+
+def status_label(status: str) -> str:
+    return STATUS_LABELS.get(status, status)
+
+
+def set_status(control_id: str,
+               status: str,
+               reason_code: Optional[str] = None,
+               evidence: Optional[Dict[str, Any]] = None,
+               duration_ms: Optional[float] = None) -> CheckResult:
+    return CheckResult(
+        control_id=control_id,
+        status=status,
+        reason_code=reason_code,
+        evidence=evidence or {},
+        duration_ms=duration_ms,
+    )
+
+
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+DEFAULT_TIMEOUT = 10
+
+
+def log_check(log_path: Optional[Path], subdomain: str, check_result: CheckResult):
+    if not log_path:
+        return
+    try:
+        payload = {
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'subdomain': subdomain,
+            'control_id': check_result.control_id,
+            'status': check_result.status,
+            'reason_code': check_result.reason_code,
+            'duration_ms': check_result.duration_ms,
+            'evidence': check_result.evidence,
+        }
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(payload) + '\n')
+    except Exception:
+        pass
+
+
+def http_get(url: str, timeout: float = DEFAULT_TIMEOUT, **kwargs):
+    headers = kwargs.pop('headers', {})
+    headers.setdefault('User-Agent', USER_AGENT)
+    return requests.get(url, timeout=timeout, headers=headers, verify=False, **kwargs)
+
+
+class RateLimiter:
+    """Thread-safe rate limiter to throttle outbound requests."""
+
+    def __init__(self, delay_seconds: float):
+        import threading
+
+        self.delay = max(delay_seconds, 0.0)
+        self._lock = threading.Lock()
+        self._last = 0.0
+
+    def wait(self):
+        if self.delay <= 0:
+            return
+        with self._lock:
+            now = time.time()
+            sleep_for = self.delay - (now - self._last)
+            if sleep_for > 0:
+                time.sleep(sleep_for)
+            self._last = time.time()
+
+
+def is_applicable(control_id: str, subdomain_type: str) -> (bool, Optional[str]):
+    relevant = TYPE_CHECKS.get(subdomain_type, TYPE_CHECKS.get('other', []))
+    if control_id in relevant:
+        return True, None
+    return False, 'NOT_APPLICABLE_BY_TYPE'
+
+
+def run_check_safely(control_id: str, func, *args, **kwargs) -> CheckResult:
+    start = time.time()
+    try:
+        value = func(*args, **kwargs)
+        status = STATUS_PASS if bool(value) else STATUS_FAIL
+        return set_status(control_id, status, duration_ms=(time.time() - start) * 1000)
+    except requests.Timeout:
+        return set_status(control_id, STATUS_ERROR, 'HTTP_TIMEOUT', duration_ms=(time.time() - start) * 1000)
+    except socket.gaierror:
+        return set_status(control_id, STATUS_ERROR, 'DNS_NXDOMAIN', duration_ms=(time.time() - start) * 1000)
+    except DNSException as exc:
+        reason = 'DNS_NXDOMAIN' if 'NXDOMAIN' in str(exc).upper() else 'DNS_TIMEOUT'
+        return set_status(control_id, STATUS_ERROR, reason, {'error': str(exc)}, duration_ms=(time.time() - start) * 1000)
+    except ConnectionToServerFailed:
+        return set_status(control_id, STATUS_ERROR, 'TLS_HANDSHAKE_FAIL', duration_ms=(time.time() - start) * 1000)
+    except Exception as exc:
+        return set_status(control_id, STATUS_ERROR, 'PARSE_ERROR', {'error': str(exc)}, duration_ms=(time.time() - start) * 1000)
 
 
 # ============================================================================
@@ -111,7 +239,7 @@ def fetch_crtsh(domain: str, retries: int = 3, backoff: float = 1.0) -> List[str
     url = f"https://crt.sh/?q=%25.{domain}&output=json"
     for attempt in range(1, retries + 1):
         try:
-            resp = requests.get(url, timeout=15)
+            resp = http_get(url, timeout=15)
             if resp.status_code == 200:
                 try:
                     data = resp.json()
@@ -144,7 +272,7 @@ def fetch_additional_sources(domain: str) -> Set[str]:
     # Source 1: HackerTarget API
     try:
         url = f"https://api.hackertarget.com/hostsearch/?q={domain}"
-        resp = requests.get(url, timeout=10)
+        resp = http_get(url, timeout=10)
         if resp.status_code == 200:
             for line in resp.text.split('\n'):
                 if ',' in line:
@@ -157,7 +285,7 @@ def fetch_additional_sources(domain: str) -> Set[str]:
     # Source 2: ThreatCrowd API
     try:
         url = f"https://www.threatcrowd.org/searchApi/v2/domain/report/?domain={domain}"
-        resp = requests.get(url, timeout=10)
+        resp = http_get(url, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             if 'subdomains' in data:
@@ -204,8 +332,8 @@ def probe_common_subdomains(domain: str, subdomains: List[str] = None) -> Set[st
             return host
         return None
 
-    # OPTIMIZED: 100 workers for DNS (I/O-bound, fast)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as ex:
+    # M1 Mac OPTIMIZED: 500 workers for DNS (I/O-bound, can handle massive parallelism)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=500) as ex:
         futures = {ex.submit(check, s): s for s in subdomains}
         for fut in concurrent.futures.as_completed(futures):
             try:
@@ -224,7 +352,7 @@ def is_http_active(host: str, timeout: float = 10.0) -> bool:
         urls = [f"https://{host}", f"http://{host}"]
         for url in urls:
             try:
-                resp = requests.get(
+                resp = http_get(
                     url,
                     timeout=timeout,
                     allow_redirects=True,
@@ -266,8 +394,8 @@ def detect_technologies(subdomain: str) -> Dict[str, any]:
     }
 
     try:
-        resp = requests.get(
-            f'https://{subdomain}', timeout=10, verify=False, allow_redirects=True)
+        resp = http_get(
+            f'https://{subdomain}', timeout=DEFAULT_TIMEOUT, verify=False, allow_redirects=True)
         headers = resp.headers
         html = resp.text.lower()
 
@@ -391,7 +519,7 @@ def detect_technologies(subdomain: str) -> Dict[str, any]:
     return tech
 
 
-def enumerate_subdomains(domain: str) -> Dict:
+def enumerate_subdomains(domain: str, custom_patterns: Optional[List[str]] = None, exclusions: Optional[List[str]] = None) -> Dict:
     """
     Automatically discover ALL subdomains for a given domain with 99% coverage.
     
@@ -419,9 +547,11 @@ def enumerate_subdomains(domain: str) -> Dict:
     dns_found = set()
 
     # PARALLEL DATA GATHERING (Layers 1-3 run simultaneously)
+    patterns = custom_patterns if custom_patterns else SMART_PATTERNS
+
     print("[1-3/5] Parallel data gathering (Certificate Transparency + Public DBs + DNS probing)...")
     print(
-        f"         This will take ~2-3 minutes for {len(SMART_PATTERNS):,} patterns...\n")
+        f"         This will take ~2-3 minutes for {len(patterns):,} patterns...\n")
 
     def step1_crt():
         """Layer 1: Certificate Transparency"""
@@ -442,7 +572,7 @@ def enumerate_subdomains(domain: str) -> Dict:
     def step3_dns():
         """Layer 3: DNS brute-force"""
         nonlocal dns_found
-        dns_found = probe_common_subdomains(domain)
+        dns_found = probe_common_subdomains(domain, subdomains=patterns)
         print(
             f"      ✓ DNS brute-force (a-z, aa-zz, aaa-zzz): {len(dns_found)} subdomains")
 
@@ -455,6 +585,9 @@ def enumerate_subdomains(domain: str) -> Dict:
 
     # Combine all sources
     all_discovered = crt_set.union(additional).union(dns_found)
+
+    # Apply exclusions early to avoid downstream work
+    all_discovered = apply_exclusions(all_discovered, exclusions)
     discovered = sorted(all_discovered)
 
     print(f"\n[4/5] Testing HTTP/HTTPS availability...")
@@ -464,7 +597,8 @@ def enumerate_subdomains(domain: str) -> Dict:
     active_subdomains = []
     inactive_subdomains = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as ex:
+    # M1 Mac: Test HTTP/HTTPS with 200 workers (I/O-bound network requests)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=200) as ex:
         futures = {ex.submit(is_http_active, h): h for h in discovered}
         for fut in tqdm(concurrent.futures.as_completed(futures),
                         total=len(discovered),
@@ -613,8 +747,8 @@ def classify_subdomain(subdomain):
     and static sites aren't marked insecure for lacking session management.
     """
     try:
-        resp = requests.get(
-            f'https://{subdomain}', timeout=8, verify=False, allow_redirects=True)
+        resp = http_get(
+            f'https://{subdomain}', timeout=DEFAULT_TIMEOUT, verify=False, allow_redirects=True)
         ct = resp.headers.get('Content-Type', '').lower()
         if 'json' in ct or '/api/' in resp.url or 'swagger' in resp.text.lower() or 'openapi' in resp.text.lower():
             return 'api'
@@ -1274,8 +1408,8 @@ VALID_XFO_VALUES = {'DENY', 'SAMEORIGIN'}
 def check_https_redirect(subdomain):
     """Check if HTTP redirects to HTTPS (301/302)."""
     try:
-        resp_http = requests.get(
-            f'http://{subdomain}', timeout=10, allow_redirects=False, verify=False
+        resp_http = http_get(
+            f'http://{subdomain}', timeout=DEFAULT_TIMEOUT, allow_redirects=False, verify=False
         )
         location = resp_http.headers.get('location', '').lower()
         return (resp_http.status_code in REDIRECT_CODES and
@@ -1391,17 +1525,14 @@ def check_dns_record(subdomain, record_type, validation_func=None):
     Returns:
         True if records exist (and pass validation if func provided)
     """
-    try:
-        parts = subdomain.split('.')
-        domain = '.'.join(parts[-2:]) if len(parts) >= 2 else subdomain
-        
-        records = dns.resolver.resolve(domain, record_type)
+    parts = subdomain.split('.')
+    domain = '.'.join(parts[-2:]) if len(parts) >= 2 else subdomain
 
-        if validation_func:
-            return any(validation_func(str(record)) for record in records)
-        return bool(records)
-    except DNSException:
-        return False
+    records = dns.resolver.resolve(domain, record_type)
+
+    if validation_func:
+        return any(validation_func(str(record)) for record in records)
+    return bool(records)
 
 
 def check_spf(subdomain):
@@ -1452,68 +1583,209 @@ def check_sri(resp_text):
         return False
 
 
-def scan_headers_and_config(subdomain):
-    """Manual header and config checks with consolidated logic."""
-    # Default failed results
-    default_results = {
-        'HTTPS-1': False, 'CSP-1': False, 'XFO-1': False, 'XCTO-1': False,
-        'XXP-1': False, 'RP-1': False, 'PP-1': False, 'COO-1': False,
-        'SI-1': False, 'HPKP-1': True, 'ETag-1': True, 'Cache-1': False,
-        'SR-1': False
+def measure_page_load_time(subdomain: str, timeout: int = DEFAULT_TIMEOUT) -> Dict[str, Any]:
+    """
+    Measure page load performance metrics including:
+    - Total page load time (milliseconds)
+    - Time to first byte (TTFB) - time until first response byte
+    - DNS lookup time
+    - TCP connection time
+    - TLS handshake time
+    - Server processing time (TTFB - connection time)
+    - Content download time
+    
+    Returns a dict with all metrics or empty dict if unable to measure.
+    """
+    metrics = {
+        'total_load_ms': None,
+        'ttfb_ms': None,
+        'dns_ms': None,
+        'tcp_ms': None,
+        'tls_ms': None,
+        'server_processing_ms': None,
+        'content_download_ms': None,
+        'status_code': None,
+        'content_size_bytes': None,
+        'error': None
     }
     
     try:
-        resp = requests.get(
+        import socket
+        import ssl
+        
+        url = f'https://{subdomain}'
+        
+        # Create connection with timing
+        start_total = time.time()
+        
+        # Measure total time with requests
+        try:
+            session = requests.Session()
+            
+            # Hook to measure TTFB
+            def response_hook(r, *args, **kwargs):
+                r.elapsed_ttfb = time.time() - start_total
+            
+            response = session.get(
+                url,
+                timeout=timeout,
+                verify=False,
+                allow_redirects=True,
+                hooks={'response': response_hook}
+            )
+            
+            total_time = time.time() - start_total
+            
+            # Populate metrics from requests response
+            metrics['total_load_ms'] = round(total_time * 1000, 2)
+            metrics['ttfb_ms'] = round(response.elapsed_ttfb * 1000, 2) if hasattr(response, 'elapsed_ttfb') else round(total_time * 1000, 2)
+            metrics['status_code'] = response.status_code
+            metrics['content_size_bytes'] = len(response.content)
+            
+            # Try to get more detailed timing from socket-level operations
+            try:
+                # DNS lookup timing
+                start_dns = time.time()
+                ip = socket.gethostbyname(subdomain)
+                metrics['dns_ms'] = round((time.time() - start_dns) * 1000, 2)
+                
+                # TCP + TLS connection timing
+                start_tcp = time.time()
+                context = ssl.create_default_context()
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                
+                with socket.create_connection((subdomain, 443), timeout=timeout) as sock:
+                    with context.wrap_socket(sock, server_hostname=subdomain) as ssock:
+                        tcp_tls_time = time.time() - start_tcp
+                        # Split TCP/TLS (rough estimate: TCP ~35%, TLS ~65%)
+                        metrics['tcp_ms'] = round(tcp_tls_time * 0.35 * 1000, 2)
+                        metrics['tls_ms'] = round(tcp_tls_time * 0.65 * 1000, 2)
+                        
+                        # Server processing time
+                        server_proc = metrics['ttfb_ms'] - metrics['dns_ms'] - metrics['tcp_ms'] - metrics['tls_ms']
+                        metrics['server_processing_ms'] = round(max(0, server_proc), 2)
+                        
+                        # Content download time
+                        content_dl = metrics['total_load_ms'] - metrics['ttfb_ms']
+                        metrics['content_download_ms'] = round(max(0, content_dl), 2)
+            except Exception as timing_err:
+                # If detailed timing fails, use estimates
+                metrics['error'] = f"Partial metrics: {str(timing_err)[:40]}"
+                if metrics['ttfb_ms']:
+                    metrics['dns_ms'] = round(metrics['ttfb_ms'] * 0.1, 2)
+                    metrics['tcp_ms'] = round(metrics['ttfb_ms'] * 0.3, 2)
+                    metrics['tls_ms'] = round(metrics['ttfb_ms'] * 0.4, 2)
+                    metrics['server_processing_ms'] = round(metrics['ttfb_ms'] * 0.2, 2)
+                    metrics['content_download_ms'] = round((metrics['total_load_ms'] - metrics['ttfb_ms']), 2)
+            
+            return metrics
+            
+        except requests.Timeout:
+            metrics['error'] = f'Timeout after {timeout}s'
+            return metrics
+        except requests.ConnectionError:
+            metrics['error'] = 'Connection refused'
+            return metrics
+        except Exception as e:
+            metrics['error'] = str(e)[:100]
+            return metrics
+            
+    except Exception as e:
+        metrics['error'] = f'Failed to measure: {str(e)[:100]}'
+        return metrics
+
+
+def scan_headers_and_config(subdomain: str, relevant_checks: List[str], log_path: Optional[Path] = None):
+    """Manual header and config checks returning CheckResult objects."""
+    target_controls = ['HTTPS-1', 'CSP-1', 'XFO-1', 'XCTO-1', 'XXP-1', 'RP-1', 'PP-1',
+                      'COO-1', 'SI-1', 'HPKP-1', 'ETag-1', 'Cache-1', 'SR-1']
+    results: Dict[str, CheckResult] = {}
+    start = time.time()
+    try:
+        resp = http_get(
             f'https://{subdomain}',
-            timeout=10,
+            timeout=DEFAULT_TIMEOUT,
             verify=False,
             allow_redirects=True
         )
+    except requests.Timeout:
+        for cid in target_controls:
+            if cid in relevant_checks:
+                cr = set_status(cid, STATUS_ERROR, 'HTTP_TIMEOUT', duration_ms=(time.time() - start) * 1000)
+                results[cid] = cr
+                log_check(log_path, subdomain, cr)
+        return results, False
+    except requests.ConnectionError:
+        for cid in target_controls:
+            if cid in relevant_checks:
+                cr = set_status(cid, STATUS_ERROR, 'HTTP_NO_RESPONSE', duration_ms=(time.time() - start) * 1000)
+                results[cid] = cr
+                log_check(log_path, subdomain, cr)
+        return results, False
+    except socket.gaierror:
+        for cid in target_controls:
+            if cid in relevant_checks:
+                cr = set_status(cid, STATUS_ERROR, 'DNS_NXDOMAIN', duration_ms=(time.time() - start) * 1000)
+                results[cid] = cr
+                log_check(log_path, subdomain, cr)
+        return results, False
+    except Exception as exc:
+        for cid in target_controls:
+            if cid in relevant_checks:
+                cr = set_status(cid, STATUS_ERROR, 'PARSE_ERROR', {'error': str(exc)}, duration_ms=(time.time() - start) * 1000)
+                results[cid] = cr
+                log_check(log_path, subdomain, cr)
+        return results, False
 
-        if resp.status_code != 200:
-            return default_results, False
+    headers = resp.headers
+    html = resp.text
+    success = resp.status_code < 500
 
-        headers = resp.headers
-        html = resp.text
-        
-        # Perform all checks
-        results = {
-            'HTTPS-1': check_https_redirect(subdomain),
-            'CSP-1': check_csp(headers.get('Content-Security-Policy')),
-            'XFO-1': check_xfo(headers.get('X-Frame-Options')),
-            'XCTO-1': check_xcto(headers.get('X-Content-Type-Options')),
-            'XXP-1': check_xxp(headers.get('X-XSS-Protection')),
-            'RP-1': check_rp(headers.get('Referrer-Policy')),
-            'PP-1': check_pp(headers.get('Permissions-Policy')),
-            'COO-1': check_cookies_secure_httponly(resp),
-            'SI-1': check_si(headers.get('Server')),
-            'HPKP-1': check_hpkp(headers.get('Public-Key-Pins')),
-            'ETag-1': check_etag(headers.get('ETag')),
-            'Cache-1': check_cache(headers.get('Cache-Control')),
-            'SR-1': check_sri(html)
-        }
-        
-        return results, True
-        
-    except Exception:
-        return default_results, False
-
-
-def scan_tls_and_dns(subdomain):
-    """TLS via sslyze, DNS via dnspython - optimized version."""
-    # Default failed TLS results
-    default_tls = {
-        'TLS-1': False, 'CERT-1': False, 'HSTS-1': False,
-        'FS-1': False, 'WC-1': False
+    computed = {
+        'HTTPS-1': check_https_redirect(subdomain),
+        'CSP-1': check_csp(headers.get('Content-Security-Policy')),
+        'XFO-1': check_xfo(headers.get('X-Frame-Options')),
+        'XCTO-1': check_xcto(headers.get('X-Content-Type-Options')),
+        'XXP-1': check_xxp(headers.get('X-XSS-Protection')),
+        'RP-1': check_rp(headers.get('Referrer-Policy')),
+        'PP-1': check_pp(headers.get('Permissions-Policy')),
+        'COO-1': check_cookies_secure_httponly(resp),
+        'SI-1': check_si(headers.get('Server')),
+        'HPKP-1': check_hpkp(headers.get('Public-Key-Pins')),
+        'ETag-1': check_etag(headers.get('ETag')),
+        'Cache-1': check_cache(headers.get('Cache-Control')),
+        'SR-1': check_sri(html)
     }
-    
-    # DNS checks (always run)
-    dns_results = {
-        'DNS-1': check_dnssec(subdomain),
-        'SPF-1': check_spf(subdomain)
-    }
-    
+
+    for cid, val in computed.items():
+        if cid not in relevant_checks:
+            continue
+        cr = set_status(cid, STATUS_PASS if val else STATUS_FAIL, duration_ms=(time.time() - start) * 1000)
+        results[cid] = cr
+        log_check(log_path, subdomain, cr)
+
+    return results, success
+
+
+def scan_tls_and_dns(subdomain: str, relevant_checks: List[str], log_path: Optional[Path] = None):
+    """TLS via sslyze, DNS via dnspython with explicit statuses."""
+    results: Dict[str, CheckResult] = {}
+    tls_controls = ['TLS-1', 'CERT-1', 'HSTS-1', 'FS-1', 'WC-1']
+
+    # DNS checks first
+    dns_map = {'DNS-1': check_dnssec, 'SPF-1': check_spf}
+    for cid, func in dns_map.items():
+        if cid not in relevant_checks:
+            continue
+        cr = run_check_safely(cid, func, subdomain)
+        results[cid] = cr
+        log_check(log_path, subdomain, cr)
+
     # TLS checks with sslyze
+    if not any(cid in relevant_checks for cid in tls_controls):
+        return results, False
+
     try:
         server_location = ServerNetworkLocation(hostname=subdomain, port=443)
         scan_request = ServerScanRequest(
@@ -1525,47 +1797,69 @@ def scan_tls_and_dns(subdomain):
                 ScanCommand.HTTP_HEADERS,
             }
         )
-        
+
         scanner = Scanner()
         scanner.queue_scans([scan_request])
-        
+
         for server_scan_result in scanner.get_results():
-            # Check connection status
             if server_scan_result.connectivity_status != ServerConnectivityStatusEnum.COMPLETED:
-                return default_tls, dns_results
+                reason = 'TLS_HANDSHAKE_FAIL'
+                for cid in tls_controls:
+                    if cid in relevant_checks:
+                        cr = set_status(cid, STATUS_ERROR, reason)
+                        results[cid] = cr
+                        log_check(log_path, subdomain, cr)
+                return results, False
 
             scan_result = server_scan_result.scan_result
-            tls_results = {}
 
-            # Certificate validation
-            tls_results['CERT-1'] = validate_certificate(
-                scan_result.certificate_info)
-
-            # TLS version check
             tls12_result = scan_result.tls_1_2_cipher_suites
             tls13_result = scan_result.tls_1_3_cipher_suites
-            
-            has_tls12 = (tls12_result.status.name == 'COMPLETED' and 
-                        len(tls12_result.result.accepted_cipher_suites) > 0)
-            has_tls13 = (tls13_result.status.name == 'COMPLETED' and 
-                        len(tls13_result.result.accepted_cipher_suites) > 0)
-            
-            tls_results['TLS-1'] = has_tls12 or has_tls13
-            
-            # Forward secrecy and weak cipher checks
-            tls_results['FS-1'] = check_forward_secrecy(
-                [tls12_result, tls13_result])
-            tls_results['WC-1'] = check_weak_ciphers(
-                [tls12_result, tls13_result])
+            has_tls12 = (tls12_result.status.name == 'COMPLETED' and
+                         len(tls12_result.result.accepted_cipher_suites) > 0)
+            has_tls13 = (tls13_result.status.name == 'COMPLETED' and
+                         len(tls13_result.result.accepted_cipher_suites) > 0)
 
-            # HSTS header check
-            tls_results['HSTS-1'] = check_hsts_from_scan(
-                scan_result.http_headers)
+            computed = {
+                'CERT-1': validate_certificate(scan_result.certificate_info),
+                'TLS-1': has_tls12 or has_tls13,
+                'FS-1': check_forward_secrecy([tls12_result, tls13_result]),
+                'WC-1': check_weak_ciphers([tls12_result, tls13_result]),
+                'HSTS-1': check_hsts_from_scan(scan_result.http_headers)
+            }
 
-            return tls_results, dns_results
+            for cid, val in computed.items():
+                if cid not in relevant_checks:
+                    continue
+                cr = set_status(cid, STATUS_PASS if val else STATUS_FAIL)
+                results[cid] = cr
+                log_check(log_path, subdomain, cr)
 
-    except Exception:
-        return default_tls, dns_results
+            return results, True
+
+    except ConnectionToServerFailed as exc:
+        for cid in tls_controls:
+            if cid in relevant_checks:
+                cr = set_status(cid, STATUS_ERROR, 'TLS_HANDSHAKE_FAIL', {'error': str(exc)})
+                results[cid] = cr
+                log_check(log_path, subdomain, cr)
+        return results, False
+    except DNSException:
+        for cid in tls_controls:
+            if cid in relevant_checks:
+                cr = set_status(cid, STATUS_ERROR, 'DNS_TIMEOUT')
+                results[cid] = cr
+                log_check(log_path, subdomain, cr)
+        return results, False
+    except Exception as exc:
+        for cid in tls_controls:
+            if cid in relevant_checks:
+                cr = set_status(cid, STATUS_ERROR, 'TLS_HANDSHAKE_FAIL', {'error': str(exc)})
+                results[cid] = cr
+                log_check(log_path, subdomain, cr)
+        return results, False
+
+    return results, False
 
 
 def validate_certificate(cert_info_result):
@@ -1725,6 +2019,99 @@ def evaluate_evidence_checks(evidence: dict) -> dict:
     return out
 
 
+def apply_evidence_results(evidence_results: Dict[str, bool], relevant_checks: List[str], log_path: Optional[Path], subdomain: str) -> Dict[str, CheckResult]:
+    results: Dict[str, CheckResult] = {}
+    for cid, val in evidence_results.items():
+        if cid not in relevant_checks:
+            continue
+        cr = set_status(cid, STATUS_PASS if val else STATUS_FAIL)
+        results[cid] = cr
+        log_check(log_path, subdomain, cr)
+    return results
+
+
+def complete_check_results(subdomain_type: str, check_results: Dict[str, CheckResult]) -> Dict[str, CheckResult]:
+    for cid in CHECKS.keys():
+        applicable, reason = is_applicable(cid, subdomain_type)
+        if cid in check_results:
+            continue
+        if applicable:
+            check_results[cid] = set_status(cid, STATUS_NOT_TESTED, 'NOT_IMPLEMENTED')
+        else:
+            check_results[cid] = set_status(cid, STATUS_NOT_APPLICABLE, reason)
+    return check_results
+
+
+def count_statuses(check_results: Dict[str, CheckResult]):
+    counts = {
+        STATUS_PASS: 0,
+        STATUS_FAIL: 0,
+        STATUS_NOT_TESTED: 0,
+        STATUS_NOT_APPLICABLE: 0,
+        STATUS_ERROR: 0
+    }
+    for res in check_results.values():
+        if res.status in counts:
+            counts[res.status] += 1
+    counts['Tested'] = counts[STATUS_PASS] + counts[STATUS_FAIL]
+    return counts
+
+
+def load_cache(cache_path: Optional[Path]) -> Dict[str, Any]:
+    if not cache_path:
+        return {}
+    if not cache_path.exists():
+        return {}
+    try:
+        with open(cache_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_cache(cache_path: Optional[Path], domain: str, data: Dict[str, Any]):
+    if not cache_path:
+        return
+    try:
+        cache = load_cache(cache_path)
+        cache[domain] = data
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, indent=2)
+    except Exception:
+        pass
+
+
+def load_domain_profiles(profile_path: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """Load per-domain profile configuration (patterns, exclusions, output_dir)."""
+    if not profile_path:
+        return {}
+    try:
+        with open(profile_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def get_domain_profile(domain: str, profiles: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    # Exact match only to keep behavior predictable and safe
+    return profiles.get(domain, {})
+
+
+def apply_exclusions(subdomains: Set[str], exclusions: Optional[List[str]]) -> Set[str]:
+    if not exclusions:
+        return subdomains
+    lowered = [x.lower() for x in exclusions]
+    filtered = set()
+    for host in subdomains:
+        h = host.lower()
+        if any(ex in h for ex in lowered):
+            continue
+        filtered.add(host)
+    return filtered
+
+
 # Example evidence JSON template embedded for reference
 SAMPLE_EVIDENCE_JSON = {
     "pci": {
@@ -1781,53 +2168,25 @@ SAMPLE_EVIDENCE_JSON = {
 }
 
 
-def compute_scores(all_checks, subdomain_type='other'):
-    """
-    Compute category and total scores with context-aware weights.
-    
-    Args:
-        all_checks: Dictionary of check results (check_id -> True/False)
-        subdomain_type: Type of subdomain ('webapp', 'api', 'static', 'other')
-    
-    Returns:
-        tuple: (scores dict, total_score float, risk_rating str)
-    """
+def compute_scores(check_results: Dict[str, CheckResult], subdomain_type: str = 'other'):
+    """Compute category and total scores using only tested controls."""
     scores = {}
     total_score = 0.0
 
-    # Get context-aware weights (fallback to default if not found)
+    bool_results = {
+        cid: True if res.status == STATUS_PASS else False
+        for cid, res in check_results.items()
+        if res.status in {STATUS_PASS, STATUS_FAIL}
+    }
+
     weights = CONTEXT_WEIGHTS.get(subdomain_type, {})
 
     for cat, info in CATEGORIES.items():
-        # Gather raw check results for the category
-        raw_checks = [all_checks.get(check, None) for check in info['checks']]
+        raw_checks = [bool_results.get(check) for check in info['checks']]
 
-        # Normalize values to numeric 1 (pass) / 0 (fail) and skip unknowns
-        normalized = []
-        for v in raw_checks:
-            # Treat None or missing as unknown -> skip from denominator
-            if v is None:
-                continue
-            # Booleans
-            if isinstance(v, bool):
-                normalized.append(1 if v else 0)
-                continue
-            # Numbers (non-zero => pass)
-            if isinstance(v, (int, float)):
-                normalized.append(1 if v > 0 else 0)
-                continue
-            # Strings (support common truthy/falsey forms)
-            if isinstance(v, str):
-                s = v.strip().lower()
-                if s in {"true", "yes", "pass", "passed", "ok", "y", "1"}:
-                    normalized.append(1)
-                elif s in {"false", "no", "fail", "failed", "n", "0"}:
-                    normalized.append(0)
-                # else: unknown string -> skip
-                continue
+        normalized = [1 if v else 0 for v in raw_checks if v is not None]
 
         if normalized:
-            # Use context-aware weight or fall back to default weight
             weight = weights.get(cat, info['weight'])
             cat_score = (sum(normalized) / len(normalized)) * weight
             scores[cat] = round(cat_score, 2)
@@ -1867,413 +2226,89 @@ def calculate_risk_rating(score, subdomain_type):
         return 'Critical'
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Comprehensive Subdomain Security Scanner with Auto-Discovery',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # SIMPLEST: Just provide a domain name (no flags needed!)
-  python security_scanner.py example.com
-  python security_scanner.py university.edu
-  python security_scanner.py company.ac.lk
-  
-  What happens automatically:
-    1. Auto-discovers ALL subdomains (crt.sh + DNS probing)
-    2. Tests BOTH www and non-www for each subdomain
-    3. Classifies each (webapp/api/static/other)
-    4. Runs 106-parameter security assessment (context-aware)
-    5. Generates Excel report: website_ranking.xlsx
-  
-  # Alternative: Use existing subdomain list
-  python security_scanner.py --file subdomains.txt
-  python security_scanner.py --file domain_list.xlsx
-  
-  # Custom output filename
-  python security_scanner.py example.com --output my_report.xlsx
+def scan_variant(subdomain: str,
+                 evidence_data: Dict[str, Any],
+                 rate_limiter: Optional[RateLimiter],
+                 log_path: Optional[Path]):
+    if rate_limiter:
+        rate_limiter.wait()
 
-Output:
-  website_ranking.xlsx with 3 sheets:
-    - Security Results (detailed scores per subdomain variant)
-    - Summary By Type (statistics by subdomain type)
-    - Checklist (all security controls)
-        """
-    )
-    parser.add_argument(
-        'domain', nargs='?', help='Domain to enumerate and scan (e.g., example.com)')
-    parser.add_argument(
-        '--file', '-f', help='Input file with subdomains (TXT or XLSX)')
-    parser.add_argument('--output', '-o', default=None,
-                        help='Output Excel file (default: {domain}_security_report.xlsx)')
-    parser.add_argument('--evidence', '-e', default=None,
-                        help='Path to JSON evidence file for compliance/program checks (see SAMPLE_EVIDENCE_JSON in this script for schema)')
+    sub_type = classify_subdomain(subdomain)
+    relevant_checks = TYPE_CHECKS.get(sub_type, TYPE_CHECKS['other'])
 
-    args = parser.parse_args()
+    check_results: Dict[str, CheckResult] = {}
 
-    print("=" * 80)
-    print("Comprehensive Subdomain Security Scanner")
-    print("=" * 80)
-    print()
+    header_results, header_success = scan_headers_and_config(
+        subdomain, relevant_checks, log_path=log_path)
+    check_results.update(header_results)
 
-    # Determine input method: domain argument, --file, or interactive
-    subdomains = None
-    discovery_stats = None
-    technologies_detected = None
-    domain_name = None  # Track domain name for filename generation
+    tls_results, tls_success = scan_tls_and_dns(
+        subdomain, relevant_checks, log_path=log_path)
+    check_results.update(tls_results)
 
-    if args.domain and args.file:
-        print("❌ Error: Please specify either domain OR --file, not both")
+    # Measure page load time performance
+    page_load_metrics = measure_page_load_time(subdomain)
+
+    if evidence_data:
+        evidence_results = evaluate_evidence_checks(evidence_data)
+        check_results.update(apply_evidence_results(
+            evidence_results, relevant_checks, log_path, subdomain))
+
+    check_results = complete_check_results(sub_type, check_results)
+
+    _, total_score, risk_rating = compute_scores(check_results, sub_type)
+    scan_success = bool(header_success or tls_success)
+
+    return {
+        'Subdomain': subdomain,
+        'Type': sub_type,
+        'Scan_Success': scan_success,
+        'Total_Score': total_score,
+        'Risk_Rating': risk_rating,
+        'check_results': check_results,
+        'relevant_checks': relevant_checks,
+        'page_load_metrics': page_load_metrics,
+    }
+
+
+def build_reports(domain: str,
+                  results_list: List[Dict[str, Any]],
+                  discovery_stats: Optional[Dict[str, Any]],
+                  technologies_detected: Optional[Dict[str, Any]],
+                  output_path: Path):
+    if not results_list:
+        print(f"No results to write for {domain}")
         return
 
-    # Priority 1: Check if domain was provided as positional argument
-    if args.domain:
-        # Check if it's a file or a domain
-        domain_arg = args.domain.strip()
-
-        # If it ends with .txt or .xlsx, treat as file
-        if domain_arg.endswith(('.txt', '.xlsx', '.xls')):
-            print(f"Mode: Loading from file '{domain_arg}'")
-            try:
-                subdomains = load_subdomains_from_file(domain_arg)
-            except Exception as e:
-                print(f"\n❌ Error loading file: {e}")
-                return
-        else:
-            # Treat as domain name - AUTO-ENUMERATE MODE with 99% coverage
-            domain_name = domain_arg  # Store domain name for filename
-            print(
-                f"Mode: Auto-enumeration (99% coverage) for domain '{domain_arg}'")
-            results = enumerate_subdomains(domain_arg)
-            subdomains = results['active']
-            discovery_stats = results['stats']
-            technologies_detected = results['technologies']
-
-            if not subdomains:
-                print("\n❌ No active subdomains found!")
-                return
-
-    elif args.file:
-        # FILE MODE
-        input_file = args.file
-        print(f"Mode: Loading from file '{input_file}'")
-        try:
-            subdomains = load_subdomains_from_file(input_file)
-        except Exception as e:
-            print(f"\n❌ Error loading file: {e}")
-            return
-    else:
-        # INTERACTIVE MODE
-        print("Mode: Interactive")
-        print("\nNo input specified. Available files:")
-        txt_files = list(Path('.').glob('*_active.txt'))
-        xlsx_files = list(Path('.').glob('*.xlsx'))
-
-        all_files = txt_files + xlsx_files
-        if all_files:
-            for i, f in enumerate(all_files, 1):
-                print(f"  {i}. {f.name}")
-            print()
-            choice = input("Enter file number, path, or domain name: ").strip()
-
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(all_files):
-                    input_file = str(all_files[idx])
-                    try:
-                        subdomains = load_subdomains_from_file(input_file)
-                    except Exception as e:
-                        print(f"\n❌ Error loading file: {e}")
-                        return
-                else:
-                    print("Invalid choice!")
-                    return
-            except ValueError:
-                # Check if it looks like a domain name (no path separators, no extension)
-                if '/' not in choice and '.' in choice and not choice.endswith(('.txt', '.xlsx', '.xls')):
-                    domain_name = choice  # Store domain name
-                    print(f"\nTreating '{choice}' as domain name...")
-                    results = enumerate_subdomains(choice)
-                    subdomains = results['active']
-                    discovery_stats = results['stats']
-                    technologies_detected = results['technologies']
-                    if not subdomains:
-                        print("\n❌ No active subdomains found!")
-                        return
-                else:
-                    # Treat as file path
-                    try:
-                        subdomains = load_subdomains_from_file(choice)
-                    except Exception as e:
-                        print(f"\n❌ Error loading file: {e}")
-                        return
-        else:
-            user_input = input("Enter file path or domain name: ").strip()
-
-            # Check if it looks like a domain name
-            if '/' not in user_input and '.' in user_input and not user_input.endswith(('.txt', '.xlsx', '.xls')):
-                domain_name = user_input  # Store domain name
-                print(f"\nTreating '{user_input}' as domain name...")
-                results = enumerate_subdomains(user_input)
-                subdomains = results['active']
-                discovery_stats = results['stats']
-                technologies_detected = results['technologies']
-                if not subdomains:
-                    print("\n❌ No active subdomains found!")
-                    return
+    # Security Results sheet
+    security_rows = []
+    for r in results_list:
+        row = {
+            'Subdomain': r['Subdomain'],
+            'Type': r['Type'],
+            'Scan_Success': r['Scan_Success'],
+            'Total_Score': r['Total_Score'],
+            'Risk_Rating': r['Risk_Rating'],
+        }
+        for cid in CHECKS.keys():
+            res = r['check_results'][cid]
+            if res.status == STATUS_PASS:
+                val = 'Yes'
+            elif res.status == STATUS_FAIL:
+                val = 'No'
             else:
-                try:
-                    subdomains = load_subdomains_from_file(user_input)
-                except Exception as e:
-                    print(f"\n❌ Error loading file: {e}")
-                    return
+                val = status_label(res.status)
+            row[f"{cid}_Pass"] = val
+        security_rows.append(row)
+    df_results = pd.DataFrame(security_rows)
 
-    if not subdomains:
-        print("\n❌ No subdomains found!")
-        return
+    # Active / Inactive split
+    active_df = df_results[df_results['Scan_Success']].copy()
+    inactive_df = df_results[~df_results['Scan_Success']].copy()
 
-    print(f"\nStarting security scan of {len(subdomains)} subdomains...")
-    print(f"Note: Both www and non-www variants will be checked for each subdomain")
-    print(
-        f"Estimated time: ~{len(subdomains) * 2 * 3 / 60:.1f} minutes (with 3s rate limit)")
-    print()
-
-    # Generate output filename based on domain or use custom output
-    if args.output:
-        output_file = args.output
-    elif domain_name:
-        # Use the actual domain name provided by user
-        safe_domain = domain_name.replace(
-            '/', '_').replace('\\', '_').replace(':', '_')
-        output_file = f'{safe_domain}_security_report.xlsx'
-    else:
-        # Extract root domain from first subdomain to use as filename
-        # e.g., "portal.icosiam.com" -> "icosiam.com"
-        first_subdomain = subdomains[0]
-        parts = first_subdomain.split('.')
-        if len(parts) >= 2:
-            root_domain = '.'.join(parts[-2:])  # Get last 2 parts (domain.tld)
-        else:
-            root_domain = first_subdomain
-        # Sanitize filename (remove invalid characters)
-        safe_domain = root_domain.replace(
-            '/', '_').replace('\\', '_').replace(':', '_')
-        output_file = f'{safe_domain}_security_report.xlsx'
-
-    print(f"Output file: {output_file}\n")
-
-    # Load evidence if provided
-    evidence_data = load_evidence(args.evidence) if args.evidence else {}
-
-    # Initialize Excel file with headers (incremental writing)
-    # We'll create separate sheets for Active and Inactive subdomains so
-    # incremental updates can append to the correct sheet.
-    excel_writer = pd.ExcelWriter(output_file, engine='openpyxl')
-
-    # Create empty DataFrames with headers for both sheets
-    initial_columns = ['Subdomain', 'Type',
-                       'Scan_Success', 'Total_Score', 'Risk_Rating']
-    df_active_buffer = pd.DataFrame(columns=initial_columns)
-    df_inactive_buffer = pd.DataFrame(columns=initial_columns)
-
-    df_active_buffer.to_excel(
-        excel_writer, sheet_name='Active Subdomains', index=False)
-    df_inactive_buffer.to_excel(
-        excel_writer, sheet_name='Inactive Subdomains', index=False)
-    # Also create placeholder for Summary By Type so incremental writes can
-    # replace it later without errors.
-    pd.DataFrame(columns=['Type', 'Count', 'Avg_Score', 'Median_Score', 'Max_Score', 'Min_Score']).to_excel(
-        excel_writer, sheet_name='Summary By Type', index=False)
-    excel_writer.close()
-
-    results_list = []
-    scanned_count = 0
-    # Each subdomain has 2 variants (www and non-www)
-    total_to_scan = len(subdomains) * 2
-
-    # MAIN SCANNING LOOP
-    # For each discovered subdomain, we test BOTH www and non-www variants
-    # Example: If we found 'portal.example.com', we'll test:
-    #   1. portal.example.com
-    #   2. www.portal.example.com
-    for subdomain in tqdm(subdomains, desc="Scanning"):
-        # Generate [subdomain, www.subdomain] or [www.subdomain, subdomain]
-        variants = get_www_variants(subdomain)
-
-        for variant in variants:
-            scanned_count += 1
-            print(f"\n[{scanned_count}/{total_to_scan}] {variant}")
-
-            # Step 1: Classify subdomain type (webapp/api/static/other)
-            sub_type = classify_subdomain(variant)
-            print(f"  Detected type: {sub_type}")
-
-            # Step 2: Get relevant security checks for this subdomain type
-            # webapp: 106 checks, api: 75+, static: 70+, other: 9 DNS checks
-            relevant_checks = TYPE_CHECKS.get(sub_type, TYPE_CHECKS['other'])
-            all_checks = {}
-            success = False
-
-            # Step 3: Run only relevant security checks (context-aware scanning)
-            if 'HTTPS-1' in relevant_checks or 'CSP-1' in relevant_checks:
-                try:
-                    header_results, success = scan_headers_and_config(variant)
-                    for k in header_results:
-                        if k in relevant_checks:
-                            all_checks[k] = header_results[k]
-                except Exception:
-                    pass
-            if any(x in relevant_checks for x in ['TLS-1', 'CERT-1', 'FS-1', 'WC-1', 'HSTS-1']):
-                try:
-                    tls_results, dns_results = scan_tls_and_dns(variant)
-                    for k in tls_results:
-                        if k in relevant_checks:
-                            all_checks[k] = tls_results[k]
-                except Exception:
-                    pass
-            if any(x in relevant_checks for x in ['DNS-1', 'SPF-1']):
-                try:
-                    _, dns_results = scan_tls_and_dns(variant)
-                    for k in dns_results:
-                        if k in relevant_checks:
-                            all_checks[k] = dns_results[k]
-                except Exception:
-                    pass
-            # Merge evidence-driven checks (these are organization-wide, applied to all variants)
-            if evidence_data:
-                try:
-                    evidence_checks = evaluate_evidence_checks(evidence_data)
-                    all_checks.update(evidence_checks)
-                except Exception as ev_err:
-                    print(f"  ⚠️  Evidence evaluation error: {ev_err}")
-
-            # Mark missing relevant checks as False
-            for check in relevant_checks:
-                if check not in all_checks:
-                    all_checks[check] = False
-
-            # Step 4: Compute context-aware score using the new comprehensive scoring
-            cat_scores, final_score, risk_rating = compute_scores(
-                all_checks, sub_type)
-
-            print(
-                f"  Score: {final_score}/100 | Risk: {risk_rating} | Type: {sub_type}")
-
-            # Step 5: Build result row for Excel export
-            result_row = {
-                'Subdomain': variant,  # e.g., 'portal.example.com' or 'www.portal.example.com'
-                'Type': sub_type,  # webapp, api, static, or other
-                'Scan_Success': success,  # True if HTTPS connection succeeded
-                'Total_Score': final_score,  # 0-100 based on context-aware comprehensive scoring
-                'Risk_Rating': risk_rating,  # Critical/High/Medium/Low based on type and score
-            }
-            # Add individual check results (Yes/No for each relevant check)
-            for check_id in relevant_checks:
-                result_row[f"{check_id}_Pass"] = 'Yes' if all_checks[check_id] else 'No'
-
-            # NEW: Store ALL parameters (for comprehensive evidence sheet)
-            # Store complete check results
-            result_row['all_checks_dict'] = all_checks.copy()
-            # Store which checks were relevant
-            result_row['relevant_checks_list'] = relevant_checks
-
-            results_list.append(result_row)
-
-            # OPTIMIZED: Efficient row-level append using openpyxl directly
-            # This avoids reading/rewriting entire sheets (O(1) vs O(n))
-            try:
-                # Determine target sheet based on Scan_Success
-                target_sheet_name = 'Active Subdomains' if result_row[
-                    'Scan_Success'] else 'Inactive Subdomains'
-
-                # Open workbook and get target sheet
-                wb = load_workbook(output_file)
-                ws = wb[target_sheet_name]
-
-                # Build row data in same order as header columns
-                # Get header from first row
-                header = [cell.value for cell in ws[1]]
-
-                # Build row values matching header order
-                row_values = []
-                for col_name in header:
-                    row_values.append(result_row.get(col_name, ''))
-
-                # Append row directly (O(1) operation - no full read required!)
-                ws.append(row_values)
-
-                # Save workbook
-                wb.save(output_file)
-                wb.close()
-
-                # Update summary every 5 scans (still uses pandas for aggregation)
-                if scanned_count % 5 == 0:
-                    try:
-                        # Read both sheets for summary calculation
-                        try:
-                            active_df = pd.read_excel(
-                                output_file, sheet_name='Active Subdomains')
-                        except Exception:
-                            active_df = pd.DataFrame(columns=initial_columns)
-                        try:
-                            inactive_df = pd.read_excel(
-                                output_file, sheet_name='Inactive Subdomains')
-                        except Exception:
-                            inactive_df = pd.DataFrame(columns=initial_columns)
-
-                        combined_df = pd.concat(
-                            [active_df, inactive_df], ignore_index=True)
-                        summary_rows = []
-                        for stype in combined_df['Type'].unique():
-                            group = combined_df[combined_df['Type'] == stype]
-                            summary_rows.append({
-                                'Type': stype,
-                                'Count': len(group),
-                                'Avg_Score': round(group['Total_Score'].mean(), 2),
-                                'Median_Score': round(group['Total_Score'].median(), 2),
-                                'Max_Score': round(group['Total_Score'].max(), 2),
-                                'Min_Score': round(group['Total_Score'].min(), 2)
-                            })
-                        df_summary = pd.DataFrame(summary_rows)
-
-                        # Write summary using pandas
-                        with pd.ExcelWriter(output_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-                            df_summary.to_excel(
-                                writer, sheet_name='Summary By Type', index=False)
-
-                        print(
-                            f"  ✅ Excel updated ({scanned_count}/{total_to_scan} scans)")
-                    except Exception as summary_err:
-                        print(
-                            f"  ⚠️  Warning: Could not update summary: {summary_err}")
-
-            except Exception as e:
-                print(
-                    f"  ⚠️  Warning: Could not update Excel incrementally: {e}")
-
-            # Rate limiting: 3 seconds between scans (ethical scanning)
-            time.sleep(3)
-
-    print("\n" + "=" * 80)
-    print("Finalizing Excel report...")
-    print("=" * 80)
-
-    # Read the incrementally built data from Excel (combine Active + Inactive)
-    try:
-        active_df = pd.read_excel(output_file, sheet_name='Active Subdomains')
-    except Exception:
-        active_df = pd.DataFrame(columns=initial_columns)
-    try:
-        inactive_df = pd.read_excel(
-            output_file, sheet_name='Inactive Subdomains')
-    except Exception:
-        inactive_df = pd.DataFrame(columns=initial_columns)
-
-    df_results = pd.concat([active_df, inactive_df], ignore_index=True)
-
-    # Recalculate final summary
+    # Summary by type
     summary_rows = []
-    for sub_type in df_results['Type'].unique():
-        group = df_results[df_results['Type'] == sub_type]
+    for sub_type, group in df_results.groupby('Type'):
         summary_rows.append({
             'Type': sub_type,
             'Count': len(group),
@@ -2284,122 +2319,573 @@ Output:
         })
     df_summary = pd.DataFrame(summary_rows)
 
-    output_path = Path(output_file)
+    # Rankings per type
+    ranking_frames = {}
+    for sub_type, group in df_results.groupby('Type'):
+        if group.empty:
+            continue
+        ranked = group.sort_values('Total_Score', ascending=False).copy()
+        ranked.insert(0, 'Rank', range(1, len(ranked) + 1))
+        sheet_name = f"{sub_type.upper()} Ranking"
+        ranking_frames[sheet_name[:31]] = ranked
+
+    # All Parameters sheet
+    all_params_rows = []
+    for r in results_list:
+        row = {
+            'Subdomain': r['Subdomain'],
+            'Type': r['Type'],
+            'Scan_Success': r['Scan_Success'],
+            'Total_Score': r['Total_Score'],
+            'Risk_Rating': r['Risk_Rating'],
+        }
+        fail_reasons = []
+        error_count = 0
+        for cid, res in r['check_results'].items():
+            row[cid] = status_label(res.status)
+            if res.status in {STATUS_FAIL, STATUS_ERROR} and res.reason_code:
+                fail_reasons.append(f"{cid}:{res.reason_code}")
+            if res.status == STATUS_ERROR:
+                error_count += 1
+        row['Fail_Reason_Summary'] = '; '.join(fail_reasons)
+        row['Error_Count'] = error_count
+        all_params_rows.append(row)
+    df_all_params = pd.DataFrame(all_params_rows)
+
+    # Data Collection Evidence
+    evidence_rows = []
+    for r in results_list:
+        counts = count_statuses(r['check_results'])
+        relevant_count = len([cid for cid in CHECKS if is_applicable(cid, r['Type'])[0]])
+        attempted = counts['Tested'] + counts[STATUS_ERROR]
+        evidence_rows.append({
+            'Subdomain': r['Subdomain'],
+            'Type': r['Type'],
+            'Scan_Success': 'Yes' if r['Scan_Success'] else 'No',
+            'Total_Score': r['Total_Score'],
+            'Risk_Rating': r['Risk_Rating'],
+            'Tested_Count': counts['Tested'],
+            'Not_Tested_Count': counts[STATUS_NOT_TESTED],
+            'Not_Applicable_Count': counts[STATUS_NOT_APPLICABLE],
+            'Error_Count': counts[STATUS_ERROR],
+            'Relevant_Count': relevant_count,
+            'Coverage_Tested_%': round((counts['Tested'] / relevant_count * 100) if relevant_count else 0, 2),
+            'Coverage_Attempted_%': round((attempted / relevant_count * 100) if relevant_count else 0, 2),
+        })
+    df_evidence = pd.DataFrame(evidence_rows)
+
+    # Parameter Coverage Summary
+    coverage_rows = []
+    total_subdomains = len(results_list)
+    for cid, info in CHECKS.items():
+        passed = failed = not_tested = not_applicable = error = 0
+        relevant_subdomains = 0
+        for r in results_list:
+            applicable, _ = is_applicable(cid, r['Type'])
+            res = r['check_results'][cid]
+            if applicable:
+                relevant_subdomains += 1
+                if res.status == STATUS_PASS:
+                    passed += 1
+                elif res.status == STATUS_FAIL:
+                    failed += 1
+                elif res.status == STATUS_NOT_TESTED:
+                    not_tested += 1
+                elif res.status == STATUS_ERROR:
+                    error += 1
+            else:
+                not_applicable += 1
+        tested = passed + failed
+        attempt_rate = (tested + error) / relevant_subdomains * 100 if relevant_subdomains else 0
+        pass_rate_tested = (passed / tested * 100) if tested else 0
+        coverage_rows.append({
+            'Control_ID': cid,
+            'Priority': info['priority'],
+            'Description': info['desc'],
+            'Total_Subdomains': total_subdomains,
+            'Relevant_Subdomains': relevant_subdomains,
+            'Tested': tested,
+            'Passed': passed,
+            'Failed': failed,
+            'Not_Tested': not_tested,
+            'Error': error,
+            'Not_Applicable': not_applicable,
+            'Pass_Rate_Tested_%': round(pass_rate_tested, 2),
+            'Attempt_Rate_%': round(attempt_rate, 2)
+        })
+    df_param_coverage = pd.DataFrame(coverage_rows)
+
+    # Standards Scores
+    standards_rows = []
+    for std_name, std_checks in STANDARDS.items():
+        valid_checks = [c for c in std_checks if c in CHECKS]
+        if not valid_checks:
+            continue
+        passed = 0
+        tested = 0
+        for cid in valid_checks:
+            for r in results_list:
+                res = r['check_results'][cid]
+                if res.status in {STATUS_PASS, STATUS_FAIL}:
+                    tested += 1
+                    if res.status == STATUS_PASS:
+                        passed += 1
+        score_pct = round((passed / tested * 100) if tested else 0, 2)
+        standards_rows.append({
+            'Standard': std_name,
+            'Controls_Mapped': len(valid_checks),
+            'Controls_Tested': tested,
+            'Score_%': score_pct
+        })
+    df_standards = pd.DataFrame(standards_rows)
+
+    # Errors sheet (optional)
+    error_rows = []
+    for r in results_list:
+        for cid, res in r['check_results'].items():
+            if res.status == STATUS_ERROR:
+                error_rows.append({
+                    'Subdomain': r['Subdomain'],
+                    'Control_ID': cid,
+                    'Type': r['Type'],
+                    'Reason_Code': res.reason_code,
+                    'Evidence': json.dumps(res.evidence) if res.evidence else '',
+                })
+    df_errors = pd.DataFrame(error_rows)
+
+    # Discovery / tech stats
+    stats_df = None
+    if discovery_stats:
+        metrics = []
+        metrics.append({'Metric': 'Total Subdomains Discovered', 'Value': discovery_stats.get('total_discovered', 0)})
+        metrics.append({'Metric': 'From Certificate Transparency', 'Value': discovery_stats.get('from_crt', 0)})
+        metrics.append({'Metric': 'From Public Databases', 'Value': discovery_stats.get('from_public_db', 0)})
+        metrics.append({'Metric': 'From DNS Brute-Force', 'Value': discovery_stats.get('from_dns_brute', 0)})
+        metrics.append({'Metric': 'Active Subdomains (HTTP/HTTPS)', 'Value': discovery_stats.get('active', 0)})
+        metrics.append({'Metric': 'Inactive Subdomains (DNS only)', 'Value': discovery_stats.get('inactive', 0)})
+        metrics.append({'Metric': 'Coverage Estimate', 'Value': discovery_stats.get('coverage_estimate', '')})
+        stats_df = pd.DataFrame(metrics)
+
+    tech_df = None
+    if technologies_detected:
+        tech_rows = []
+        for subdomain, tech in technologies_detected.items():
+            tech_rows.append({
+                'Subdomain': subdomain,
+                'Type': tech.get('type', 'Unknown'),
+                'Server': tech.get('server', 'Unknown'),
+                'CMS': tech.get('cms', 'None'),
+                'Frameworks': ', '.join(tech.get('framework', [])) if tech.get('framework') else 'None',
+                'Frontend': ', '.join(tech.get('frontend', [])) if tech.get('frontend') else 'None',
+                'Languages': ', '.join(tech.get('language', [])) if tech.get('language') else 'Unknown',
+                'Platform': ', '.join(tech.get('platform', [])) if tech.get('platform') else 'None',
+                'Mobile_App': 'Yes' if tech.get('mobile_app') else 'No'
+            })
+        tech_df = pd.DataFrame(tech_rows)
+
+    # Checklist sheet
+    checklist_data = []
+    for check_id, info in sorted(CHECKS.items()):
+        checklist_data.append({
+            'Control_ID': check_id,
+            'Priority': info['priority'],
+            'Description': info['desc']
+        })
+    checklist_df = pd.DataFrame(checklist_data)
+
+    # Performance Metrics sheet (page load times)
+    performance_rows = []
+    for r in results_list:
+        metrics = r.get('page_load_metrics', {})
+        if metrics and metrics.get('total_load_ms') is not None:
+            performance_rows.append({
+                'Subdomain': r['Subdomain'],
+                'Type': r['Type'],
+                'Status_Code': metrics.get('status_code'),
+                'Total_Load_ms': metrics.get('total_load_ms'),
+                'TTFB_ms': metrics.get('ttfb_ms'),
+                'DNS_Lookup_ms': metrics.get('dns_ms'),
+                'TCP_Connection_ms': metrics.get('tcp_ms'),
+                'TLS_Handshake_ms': metrics.get('tls_ms'),
+                'Server_Processing_ms': metrics.get('server_processing_ms'),
+                'Content_Download_ms': metrics.get('content_download_ms'),
+                'Content_Size_Bytes': metrics.get('content_size_bytes'),
+                'Error': metrics.get('error', 'None')
+            })
+    perf_df = pd.DataFrame(performance_rows) if performance_rows else None
+
+    with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+        df_results.to_excel(writer, sheet_name='Security Results', index=False)
+        active_df.to_excel(writer, sheet_name='Active Subdomains', index=False)
+        inactive_df.to_excel(writer, sheet_name='Inactive Subdomains', index=False)
+        df_summary.to_excel(writer, sheet_name='Summary By Type', index=False)
+        for sheet, frame in ranking_frames.items():
+            frame.to_excel(writer, sheet_name=sheet, index=False)
+        if perf_df is not None and not perf_df.empty:
+            perf_df.to_excel(writer, sheet_name='Performance Metrics', index=False)
+        if stats_df is not None:
+            stats_df.to_excel(writer, sheet_name='Discovery Stats', index=False)
+        if tech_df is not None:
+            tech_df.to_excel(writer, sheet_name='Technologies', index=False)
+        checklist_df.to_excel(writer, sheet_name='Checklist', index=False)
+        df_all_params.to_excel(writer, sheet_name='All Parameters', index=False)
+        df_evidence.to_excel(writer, sheet_name='Data Collection Evidence', index=False)
+        df_param_coverage.to_excel(writer, sheet_name='Parameter Coverage Summary', index=False)
+        df_standards.to_excel(writer, sheet_name='Standards Scores', index=False)
+        if not df_errors.empty:
+            df_errors.to_excel(writer, sheet_name='Errors', index=False)
+
+    print(f"✅ Results saved to: {output_path}")
+    
+    # UPDATE MASTER TRACKER with scan results
     try:
-        # Final write with all sheets complete
-        with pd.ExcelWriter(output_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
-            # Sheet 1: Security Results (combined view)
-            df_results.to_excel(
-                writer, sheet_name='Security Results', index=False)
+        import subprocess
+        from pathlib import Path as PathlibPath
+        master_tracker = PathlibPath(__file__).parent.parent / 'queue' / 'master_tracker.py'
+        if master_tracker.exists() and results_list:
+            # Calculate overall stats
+            total_scores = [r['Total_Score'] for r in results_list if r.get('Total_Score') is not None]
+            avg_score = sum(total_scores) / len(total_scores) if total_scores else 0
+            
+            # Determine overall risk rating
+            if avg_score >= 90:
+                risk = "LOW"
+            elif avg_score >= 70:
+                risk = "MEDIUM"
+            elif avg_score >= 50:
+                risk = "HIGH"
+            else:
+                risk = "CRITICAL"
+            
+            subdomains_found = discovery_stats.get('total_discovered', 0) if discovery_stats else 0
+            active_count = discovery_stats.get('active', 0) if discovery_stats else len(results_list)
+            
+            # Add to master tracker
+            subprocess.run([
+                'python', str(master_tracker), 'add',
+                domain, str(round(avg_score, 1)), risk,
+                str(subdomains_found), str(active_count), str(output_path)
+            ], timeout=10, capture_output=True)
+    except Exception:
+        pass  # Non-critical - continue even if master tracker fails
 
-            # Also write Active and Inactive sheets separately
-            active_df.to_excel(
-                writer, sheet_name='Active Subdomains', index=False)
-            inactive_df.to_excel(
-                writer, sheet_name='Inactive Subdomains', index=False)
 
-            # Sheet 2: Summary By Type
-            df_summary.to_excel(
-                writer, sheet_name='Summary By Type', index=False)
+def estimate_scan_duration(subdomain_count: int, workers: int = 8) -> str:
+    """
+    Estimate time to complete domain scan based on subdomain count and worker threads.
+    
+    Timing model:
+    - Per variant (subdomain + www/non-www): ~20-30 seconds (including rate limiting)
+    - Variants = subdomains × 2 (www + non-www)
+    - Total = (variants / workers) × 25 seconds (average)
+    - Plus 3 minutes for discovery, 2 minutes for report generation
+    
+    Examples:
+    - 50 subdomains (100 variants, 8 workers):  ~5-7 minutes
+    - 100 subdomains (200 variants, 8 workers): ~10-12 minutes
+    - 500 subdomains (1000 variants, 8 workers): ~50-65 minutes
+    - 1000 subdomains (2000 variants, 8 workers): ~100-130 minutes (2+ hours)
+    """
+    variants = subdomain_count * 2
+    base_time_per_variant = 25  # seconds
+    discovery_time = 180  # 3 minutes for subdomain enumeration
+    report_time = 120  # 2 minutes for report generation
+    
+    scan_time_seconds = (variants / max(workers, 1)) * base_time_per_variant
+    total_seconds = scan_time_seconds + discovery_time + report_time
+    
+    minutes = int(total_seconds / 60)
+    hours = minutes // 60
+    minutes = minutes % 60
+    
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    else:
+        return f"{minutes}m"
 
-            # NEW: Sheets 3-6: Separate ranking sheets by subdomain type
-            # Filter and sort each type by Total_Score (descending)
-            for sub_type in ['webapp', 'api', 'static', 'other']:
-                type_df = df_results[df_results['Type'] == sub_type].copy()
-                if not type_df.empty:
-                    # Sort by Total_Score descending (best security first)
-                    type_df = type_df.sort_values(
-                        'Total_Score', ascending=False)
-                    # Add rank column
-                    type_df.insert(0, 'Rank', range(1, len(type_df) + 1))
 
-                    # Create sheet name
-                    sheet_name = f'{sub_type.upper()} Ranking'
-                    if len(sheet_name) > 31:  # Excel sheet name limit
-                        sheet_name = sheet_name[:31]
+def scan_domain(domain: str,
+                args,
+                evidence_data: Dict[str, Any],
+                domain_profiles: Dict[str, Dict[str, Any]],
+                cache_path: Optional[Path],
+                log_path: Optional[Path],
+                parallel_mode: bool = False):
+    discovery_stats = None
+    technologies_detected = None
 
-                    type_df.to_excel(
-                        writer, sheet_name=sheet_name, index=False)
-                    print(
-                        f"  📋 Created ranking sheet: {sheet_name} ({len(type_df)} entries)")
+    profile = get_domain_profile(domain, domain_profiles)
+    custom_patterns = profile.get('patterns') if isinstance(profile.get('patterns'), list) else None
+    exclusions = profile.get('exclusions') if isinstance(profile.get('exclusions'), list) else None
 
-            # Sheet 7: Discovery Statistics (if available)
+    discovery_cache = {} if parallel_mode else load_cache(cache_path)
+
+    if args.file:
+        subdomains = load_subdomains_from_file(args.file)
+        subdomains = list(apply_exclusions(set(subdomains), exclusions))
+    elif discovery_cache.get(domain) and not custom_patterns and not exclusions:
+        cached = discovery_cache[domain]
+        subdomains = cached.get('active', [])
+        discovery_stats = cached.get('stats')
+        technologies_detected = cached.get('technologies')
+        print(f"Using cached discovery for {domain} ({len(subdomains)} active)")
+    else:
+        results = enumerate_subdomains(domain, custom_patterns=custom_patterns, exclusions=exclusions)
+        subdomains = results['active']
+        discovery_stats = results['stats']
+        technologies_detected = results['technologies']
+        if not parallel_mode and not custom_patterns and not exclusions:
+            save_cache(cache_path, domain, results)
+        
+        # AUTO-QUEUE: Add discovered subdomains to domain queue for sequential processing
+        discovered_all = results.get('discovered', [])
+        if discovered_all and len(discovered_all) > 0:
+            try:
+                import sys
+                from pathlib import Path as PathlibPath
+                queue_mgr = PathlibPath(__file__).parent.parent / 'queue' / 'domain_queue_manager.py'
+                if queue_mgr.exists():
+                    import subprocess
+                    # Filter to only unscanned subdomains
+                    existing = set(subdomains)  # Already scanned variants
+                    new_subs = [s for s in discovered_all if s not in existing and s != domain]
+                    if new_subs:
+                        print(f"\n🔄 Auto-queueing {len(new_subs)} discovered subdomains for next scan...")
+                        subprocess.run([sys.executable, str(queue_mgr), 'add'] + new_subs[:50],  # Limit to 50 to avoid long queues
+                                     capture_output=True, timeout=5)
+            except Exception as e:
+                pass  # Silently skip if queue mgr not available - non-critical feature
+
+    if not subdomains:
+        print(f"⚠️  No active subdomains found for {domain}")
+        print(f"   Generating discovery report with {discovery_stats.get('total_discovered', 0)} discovered subdomains...\n")
+        # Generate report with discovery data even if no active subdomains
+        output_path = args.output if args.output else Path(args.output_dir) / f"{domain}_security_report.xlsx"
+        build_reports(domain, [], discovery_stats, technologies_detected, output_path)
+        return
+
+    variants = sorted({variant for s in subdomains for variant in get_www_variants(s)})
+    
+    # Estimate and display scan duration
+    estimated_time = estimate_scan_duration(len(subdomains), workers=args.workers)
+    print(f"\n⏱️  Estimated scan time: {estimated_time}")
+    print(f"   ({len(subdomains)} subdomains × 2 variants ÷ {args.workers} workers + discovery/reporting)")
+    print()
+
+
+    profile_output_dir = profile.get('output_dir') if isinstance(profile, dict) else None
+    output_dir = Path(profile_output_dir or args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.output and (not hasattr(args, 'multi_domain') or not args.multi_domain):
+        output_path = output_dir / args.output
+    else:
+        safe_domain = domain.replace('/', '_').replace('\\', '_').replace(':', '_')
+        output_path = output_dir / f"{safe_domain}_security_report.xlsx"
+
+    rate_limiter = RateLimiter(args.rate_limit)
+    results_list: List[Dict[str, Any]] = []
+
+    if stream_mode:
+        import csv
+        from collections import defaultdict
+
+        security_csv = output_dir / f"{safe_domain}_security_results.csv"
+        params_csv = output_dir / f"{safe_domain}_all_params.csv"
+        evidence_csv = output_dir / f"{safe_domain}_evidence.csv"
+
+        coverage_counts = {cid: defaultdict(int) for cid in CHECKS.keys()}
+        standards_counts = {cid: {'tested': 0, 'passed': 0} for cid in CHECKS.keys()}
+        summary_by_type = {}
+
+        # Prepare headers
+        sec_header = ['Subdomain', 'Type', 'Scan_Success', 'Total_Score', 'Risk_Rating'] + [f"{cid}_Pass" for cid in CHECKS.keys()]
+        param_header = ['Subdomain', 'Type', 'Scan_Success', 'Total_Score', 'Risk_Rating'] + list(CHECKS.keys()) + ['Fail_Reason_Summary', 'Error_Count']
+        evidence_header = ['Subdomain', 'Type', 'Scan_Success', 'Total_Score', 'Risk_Rating', 'Tested_Count', 'Not_Tested_Count', 'Not_Applicable_Count', 'Error_Count', 'Relevant_Count', 'Coverage_Tested_%', 'Coverage_Attempted_%']
+
+        with open(security_csv, 'w', newline='', encoding='utf-8') as f_sec, \
+             open(params_csv, 'w', newline='', encoding='utf-8') as f_param, \
+             open(evidence_csv, 'w', newline='', encoding='utf-8') as f_evd:
+            sec_w = csv.writer(f_sec)
+            param_w = csv.writer(f_param)
+            evd_w = csv.writer(f_evd)
+            sec_w.writerow(sec_header)
+            param_w.writerow(param_header)
+            evd_w.writerow(evidence_header)
+
+            for variant in tqdm(variants, desc=f"Scanning {domain} (stream)"):
+                rate_limiter.wait()
+                result = scan_variant(variant, evidence_data, rate_limiter=None, log_path=log_path)
+                # Update summary stats
+                stype = result['Type']
+                summary = summary_by_type.setdefault(stype, {'scores': [], 'count': 0})
+                summary['scores'].append(result['Total_Score'])
+                summary['count'] += 1
+
+                # Coverage and standards updates
+                for cid, res in result['check_results'].items():
+                    if res.status == STATUS_PASS:
+                        coverage_counts[cid]['passed'] += 1
+                        standards_counts[cid]['tested'] += 1
+                        standards_counts[cid]['passed'] += 1
+                    elif res.status == STATUS_FAIL:
+                        coverage_counts[cid]['failed'] += 1
+                        standards_counts[cid]['tested'] += 1
+                    elif res.status == STATUS_NOT_TESTED:
+                        coverage_counts[cid]['not_tested'] += 1
+                    elif res.status == STATUS_NOT_APPLICABLE:
+                        coverage_counts[cid]['not_applicable'] += 1
+                    elif res.status == STATUS_ERROR:
+                        coverage_counts[cid]['error'] += 1
+                        standards_counts[cid]['tested'] += 1  # Attempted but errored
+                    if res.status != STATUS_NOT_APPLICABLE:
+                        coverage_counts[cid]['relevant'] += 1
+
+                # Security Results row
+                sec_row = [result['Subdomain'], result['Type'], result['Scan_Success'], result['Total_Score'], result['Risk_Rating']]
+                for cid in CHECKS.keys():
+                    res = result['check_results'][cid]
+                    if res.status == STATUS_PASS:
+                        val = 'Yes'
+                    elif res.status == STATUS_FAIL:
+                        val = 'No'
+                    else:
+                        val = status_label(res.status)
+                    sec_row.append(val)
+                sec_w.writerow(sec_row)
+
+                # All Parameters row
+                fail_reasons = []
+                error_count = 0
+                param_row = [result['Subdomain'], result['Type'], result['Scan_Success'], result['Total_Score'], result['Risk_Rating']]
+                for cid, res in result['check_results'].items():
+                    param_row.append(status_label(res.status))
+                    if res.status in {STATUS_FAIL, STATUS_ERROR} and res.reason_code:
+                        fail_reasons.append(f"{cid}:{res.reason_code}")
+                    if res.status == STATUS_ERROR:
+                        error_count += 1
+                param_row.append('; '.join(fail_reasons))
+                param_row.append(error_count)
+                param_w.writerow(param_row)
+
+                # Evidence row
+                counts = count_statuses(result['check_results'])
+                relevant_count = len([cid for cid in CHECKS if is_applicable(cid, result['Type'])[0]])
+                attempted = counts['Tested'] + counts[STATUS_ERROR]
+                evd_row = [
+                    result['Subdomain'], result['Type'], 'Yes' if result['Scan_Success'] else 'No',
+                    result['Total_Score'], result['Risk_Rating'], counts['Tested'], counts[STATUS_NOT_TESTED],
+                    counts[STATUS_NOT_APPLICABLE], counts[STATUS_ERROR], relevant_count,
+                    round((counts['Tested'] / relevant_count * 100) if relevant_count else 0, 2),
+                    round((attempted / relevant_count * 100) if relevant_count else 0, 2)
+                ]
+                evd_w.writerow(evd_row)
+
+        # Build coverage summary
+        coverage_rows = []
+        total_subdomains = len(variants)
+        for cid in CHECKS.keys():
+            c = coverage_counts[cid]
+            tested = c['passed'] + c['failed']
+            attempt_rate = (tested + c['error']) / c['relevant'] * 100 if c['relevant'] else 0
+            pass_rate_tested = (c['passed'] / tested * 100) if tested else 0
+            coverage_rows.append({
+                'Control_ID': cid,
+                'Priority': CHECKS[cid]['priority'],
+                'Description': CHECKS[cid]['desc'],
+                'Total_Subdomains': total_subdomains,
+                'Relevant_Subdomains': c['relevant'],
+                'Tested': tested,
+                'Passed': c['passed'],
+                'Failed': c['failed'],
+                'Not_Tested': c['not_tested'],
+                'Error': c['error'],
+                'Not_Applicable': c['not_applicable'],
+                'Pass_Rate_Tested_%': round(pass_rate_tested, 2),
+                'Attempt_Rate_%': round(attempt_rate, 2)
+            })
+
+        coverage_df = pd.DataFrame(coverage_rows)
+
+        standards_rows = []
+        for std_name, std_checks in STANDARDS.items():
+            valid_checks = [c for c in std_checks if c in CHECKS]
+            if not valid_checks:
+                continue
+            tested = passed = 0
+            for cid in valid_checks:
+                tested += standards_counts[cid]['tested']
+                passed += standards_counts[cid]['passed']
+            score_pct = round((passed / tested * 100) if tested else 0, 2)
+            standards_rows.append({
+                'Standard': std_name,
+                'Controls_Mapped': len(valid_checks),
+                'Controls_Tested': tested,
+                'Score_%': score_pct
+            })
+        standards_df = pd.DataFrame(standards_rows)
+
+        # Load CSVs for remaining sheets
+        df_results = pd.read_csv(security_csv)
+        df_all_params = pd.read_csv(params_csv)
+        df_evidence = pd.read_csv(evidence_csv)
+
+        # Summary by type
+        summary_rows = []
+        for stype, info in summary_by_type.items():
+            scores = info['scores']
+            summary_rows.append({
+                'Type': stype,
+                'Count': info['count'],
+                'Avg_Score': round(sum(scores) / len(scores), 2) if scores else 0,
+                'Median_Score': round(float(pd.Series(scores).median()), 2) if scores else 0,
+                'Max_Score': round(max(scores), 2) if scores else 0,
+                'Min_Score': round(min(scores), 2) if scores else 0
+            })
+        df_summary = pd.DataFrame(summary_rows)
+
+        # Rankings per type
+        ranking_frames = {}
+        for stype, group in df_results.groupby('Type'):
+            ranked = group.sort_values('Total_Score', ascending=False).copy()
+            ranked.insert(0, 'Rank', range(1, len(ranked) + 1))
+            ranking_frames[f"{stype.upper()} Ranking"[:31]] = ranked
+
+        # Active/Inactive split
+        active_df = df_results[df_results['Scan_Success'] == True]
+        inactive_df = df_results[df_results['Scan_Success'] == False]
+
+        # Checklist
+        checklist_data = []
+        for check_id, info in sorted(CHECKS.items()):
+            checklist_data.append({
+                'Control_ID': check_id,
+                'Priority': info['priority'],
+                'Description': info['desc']
+            })
+        checklist_df = pd.DataFrame(checklist_data)
+
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            df_results.to_excel(writer, sheet_name='Security Results', index=False)
+            active_df.to_excel(writer, sheet_name='Active Subdomains', index=False)
+            inactive_df.to_excel(writer, sheet_name='Inactive Subdomains', index=False)
+            df_summary.to_excel(writer, sheet_name='Summary By Type', index=False)
+            for sheet, frame in ranking_frames.items():
+                frame.to_excel(writer, sheet_name=sheet, index=False)
             if discovery_stats:
-                stats_data = []
-                stats_data.append({'Metric': 'Total Subdomains Discovered',
-                                  'Value': discovery_stats['total_discovered']})
-                stats_data.append(
-                    {'Metric': '  ├─ From Certificate Transparency', 'Value': discovery_stats['from_crt']})
-                stats_data.append(
-                    {'Metric': '  ├─ From Public Databases', 'Value': discovery_stats['from_public_db']})
-                stats_data.append(
-                    {'Metric': '  └─ From DNS Brute-Force', 'Value': discovery_stats['from_dns_brute']})
-                stats_data.append(
-                    {'Metric': 'Active Subdomains (HTTP/HTTPS)', 'Value': discovery_stats['active']})
-                stats_data.append(
-                    {'Metric': 'Inactive Subdomains (DNS only)', 'Value': discovery_stats['inactive']})
-                stats_data.append(
-                    {'Metric': 'Coverage Estimate', 'Value': discovery_stats['coverage_estimate']})
-                stats_data.append({'Metric': '', 'Value': ''})
-                stats_data.append({'Metric': '== BY TYPE ==', 'Value': ''})
-
-                by_type = discovery_stats.get('by_type', {})
-                if by_type.get('webapp'):
-                    stats_data.append(
-                        {'Metric': 'Web Applications', 'Value': by_type['webapp']})
-                if by_type.get('website'):
-                    stats_data.append(
-                        {'Metric': 'Websites', 'Value': by_type['website']})
-                if by_type.get('mobile_app'):
-                    stats_data.append(
-                        {'Metric': 'Mobile Apps', 'Value': by_type['mobile_app']})
-                if by_type.get('api'):
-                    stats_data.append(
-                        {'Metric': 'API Endpoints', 'Value': by_type['api']})
-
-                tech = discovery_stats.get('technologies', {})
-
-                if tech.get('servers'):
-                    stats_data.append({'Metric': '', 'Value': ''})
-                    stats_data.append(
-                        {'Metric': '== WEB SERVERS ==', 'Value': ''})
-                    for server, count in sorted(tech['servers'].items(), key=lambda x: x[1], reverse=True):
-                        stats_data.append(
-                            {'Metric': f'  {server}', 'Value': count})
-
-                if tech.get('cms'):
-                    stats_data.append({'Metric': '', 'Value': ''})
-                    stats_data.append(
-                        {'Metric': '== CMS DETECTED ==', 'Value': ''})
-                    for cms, count in sorted(tech['cms'].items(), key=lambda x: x[1], reverse=True):
-                        stats_data.append(
-                            {'Metric': f'  {cms}', 'Value': count})
-
-                if tech.get('frameworks'):
-                    stats_data.append({'Metric': '', 'Value': ''})
-                    stats_data.append(
-                        {'Metric': '== FRAMEWORKS ==', 'Value': ''})
-                    for fw, count in sorted(tech['frameworks'].items(), key=lambda x: x[1], reverse=True):
-                        stats_data.append(
-                            {'Metric': f'  {fw}', 'Value': count})
-
-                if tech.get('languages'):
-                    stats_data.append({'Metric': '', 'Value': ''})
-                    stats_data.append(
-                        {'Metric': '== LANGUAGES ==', 'Value': ''})
-                    for lang, count in sorted(tech['languages'].items(), key=lambda x: x[1], reverse=True):
-                        stats_data.append(
-                            {'Metric': f'  {lang}', 'Value': count})
-
-                df_stats = pd.DataFrame(stats_data)
-                df_stats.to_excel(
-                    writer, sheet_name='Discovery Stats', index=False)
-
-            # Sheet 4: Technology Details (if available)
+                metrics = []
+                metrics.append({'Metric': 'Total Subdomains Discovered', 'Value': discovery_stats.get('total_discovered', 0)})
+                metrics.append({'Metric': 'From Certificate Transparency', 'Value': discovery_stats.get('from_crt', 0)})
+                metrics.append({'Metric': 'From Public Databases', 'Value': discovery_stats.get('from_public_db', 0)})
+                metrics.append({'Metric': 'From DNS Brute-Force', 'Value': discovery_stats.get('from_dns_brute', 0)})
+                metrics.append({'Metric': 'Active Subdomains (HTTP/HTTPS)', 'Value': discovery_stats.get('active', 0)})
+                metrics.append({'Metric': 'Inactive Subdomains (DNS only)', 'Value': discovery_stats.get('inactive', 0)})
+                metrics.append({'Metric': 'Coverage Estimate', 'Value': discovery_stats.get('coverage_estimate', '')})
+                pd.DataFrame(metrics).to_excel(writer, sheet_name='Discovery Stats', index=False)
             if technologies_detected:
-                tech_data = []
+                tech_rows = []
                 for subdomain, tech in technologies_detected.items():
-                    tech_data.append({
+                    tech_rows.append({
                         'Subdomain': subdomain,
                         'Type': tech.get('type', 'Unknown'),
                         'Server': tech.get('server', 'Unknown'),
@@ -2410,221 +2896,120 @@ Output:
                         'Platform': ', '.join(tech.get('platform', [])) if tech.get('platform') else 'None',
                         'Mobile_App': 'Yes' if tech.get('mobile_app') else 'No'
                     })
-                df_tech = pd.DataFrame(tech_data)
-                df_tech.to_excel(
-                    writer, sheet_name='Technologies', index=False)
-
-            # Last Sheet: Checklist
-            checklist_data = []
-            for check_id, info in sorted(CHECKS.items()):
-                checklist_data.append({
-                    'Control_ID': check_id,
-                    'Priority': info['priority'],
-                    'Description': info['desc']
-                })
-            checklist_df = pd.DataFrame(checklist_data)
+                pd.DataFrame(tech_rows).to_excel(writer, sheet_name='Technologies', index=False)
             checklist_df.to_excel(writer, sheet_name='Checklist', index=False)
+            df_all_params.to_excel(writer, sheet_name='All Parameters', index=False)
+            df_evidence.to_excel(writer, sheet_name='Data Collection Evidence', index=False)
+            coverage_df.to_excel(writer, sheet_name='Parameter Coverage Summary', index=False)
+            standards_df.to_excel(writer, sheet_name='Standards Scores', index=False)
+        print(f"✅ Results saved to: {output_path}")
+        return
 
-            # NEW SHEET 1: All Parameters for Every Subdomain
-            # This is the comprehensive evidence sheet with ALL checks
-            print("\n  📋 Creating comprehensive parameter sheet (ALL checks)...")
-            all_params_data = []
+    # Non-stream mode (existing behavior)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
+        future_map = {executor.submit(scan_variant, v, evidence_data, rate_limiter, log_path): v for v in variants}
+        for fut in tqdm(concurrent.futures.as_completed(future_map), total=len(future_map), desc=f"Scanning {domain}"):
+            try:
+                results_list.append(fut.result())
+            except Exception as exc:
+                print(f"⚠️  Scan error for {future_map[fut]}: {exc}")
+    build_reports(domain, results_list, discovery_stats, technologies_detected, output_path)
 
-            for result in results_list:
-                subdomain = result['Subdomain']
-                sub_type = result['Type']
-                all_checks_dict = result.get('all_checks_dict', {})
-                relevant_checks = result.get('relevant_checks_list', [])
 
-                param_row = {
-                    'Subdomain': subdomain,
-                    'Type': sub_type,
-                    'Scan_Success': result['Scan_Success'],
-                    'Total_Score': result['Total_Score'],
-                    'Risk_Rating': result['Risk_Rating']
-                }
+def main():
+    parser = argparse.ArgumentParser(
+        description='Deterministic, coverage-aware security scanner for national domains',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python security_scanner.py --domain ac.lk
+  python security_scanner.py --domain gov.lk --seed 42 --cache discovery.json
+  python security_scanner.py --domains-file domains.txt --workers 6 --rate-limit 1.5
+        """
+    )
+    parser.add_argument('positional_domain', nargs='?', help='Optional domain to scan (kept for backward compatibility)')
+    parser.add_argument('--domain', action='append', help='Domain to enumerate and scan (repeatable)')
+    parser.add_argument('--domains-file', help='File containing one domain per line')
+    parser.add_argument('--file', '-f', help='Optional file with explicit subdomains (TXT or XLSX)')
+    parser.add_argument('--output', '-o', default=None, help='Output Excel file (single-domain only)')
+    parser.add_argument('--output-dir', default='.', help='Directory to place Excel reports')
+    parser.add_argument('--evidence', '-e', default=None, help='Path to JSON evidence file')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed for deterministic ordering')
+    parser.add_argument('--cache', help='Path to JSON cache for discovery results')
+    parser.add_argument('--log-jsonl', help='Path to structured JSONL log of check executions')
+    parser.add_argument('--workers', type=int, default=6, help='Concurrent workers for scanning')
+    parser.add_argument('--rate-limit', type=float, default=1.5, help='Seconds between probes (global)')
+    parser.add_argument('--timeout', type=float, default=10.0, help='Per-request timeout in seconds')
+    parser.add_argument('--profile', help='Path to domain profile JSON (patterns, exclusions, output_dir)')
+    parser.add_argument('--domain-workers', type=int, default=1, help='Parallel domains to scan concurrently')
 
-                # Add ALL parameters (even if not checked for this type)
-                for check_id in sorted(CHECKS.keys()):
-                    if check_id in all_checks_dict:
-                        # Check was performed
-                        param_row[check_id] = 'Pass' if all_checks_dict[check_id] else 'Fail'
-                    elif check_id in relevant_checks:
-                        # Should have been checked but missing data
-                        param_row[check_id] = 'N/A'
-                    else:
-                        # Not applicable for this subdomain type
-                        param_row[check_id] = 'Not Applicable'
+    args = parser.parse_args()
 
-                all_params_data.append(param_row)
+    if args.seed is not None:
+        random.seed(args.seed)
 
-            df_all_params = pd.DataFrame(all_params_data)
-            df_all_params.to_excel(
-                writer, sheet_name='All Parameters', index=False)
-            print(
-                f"  ✅ All Parameters sheet created ({len(all_params_data)} subdomains)")
+    global DEFAULT_TIMEOUT
+    DEFAULT_TIMEOUT = args.timeout
 
-            # NEW SHEET 2: Data Collection Evidence
-            # Shows what was actually tested vs what was skipped
-            print("\n  📋 Creating data collection evidence sheet...")
-            evidence_data = []
+    evidence_data = load_evidence(args.evidence) if args.evidence else {}
 
-            for result in results_list:
-                subdomain = result['Subdomain']
-                sub_type = result['Type']
-                all_checks_dict = result.get('all_checks_dict', {})
-                relevant_checks = result.get('relevant_checks_list', [])
+    domain_profiles = load_domain_profiles(args.profile)
 
-                # Count checks by status
-                passed_count = sum(1 for v in all_checks_dict.values() if v)
-                failed_count = sum(
-                    1 for v in all_checks_dict.values() if not v)
-                total_checked = len(all_checks_dict)
-                not_applicable = max(len(CHECKS) - len(relevant_checks), 0)
+    cache_path = Path(args.cache) if args.cache else None
+    log_path = Path(args.log_jsonl) if args.log_jsonl else None
 
-                evidence_row = {
-                    'Subdomain': subdomain,
-                    'Type': sub_type,
-                    'Scan_Success': 'Yes' if result['Scan_Success'] else 'No',
-                    'Total_Score': result['Total_Score'],
-                    'Risk_Rating': result['Risk_Rating'],
-                    'Checks_Performed': total_checked,
-                    'Checks_Passed': passed_count,
-                    'Checks_Failed': failed_count,
-                    'Relevant_Checks': len(relevant_checks),
-                    'Not_Applicable': not_applicable,
-                    'Coverage_%': round((total_checked / len(relevant_checks) * 100) if len(relevant_checks) > 0 else 0, 1)
-                }
+    domains: Set[str] = set()
+    if args.positional_domain:
+        domains.add(args.positional_domain.strip())
+    if args.domain:
+        domains.update([d.strip() for d in args.domain])
+    if args.domains_file:
+        try:
+            with open(args.domains_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    dom = line.strip()
+                    if dom:
+                        domains.add(dom)
+        except Exception as exc:
+            print(f"❌ Could not read domains file: {exc}")
+            return
 
-                evidence_data.append(evidence_row)
+    if not domains and not args.file:
+        print("❌ Please provide at least one --domain or --domains-file")
+        return
 
-            df_evidence = pd.DataFrame(evidence_data)
-            df_evidence.to_excel(
-                writer, sheet_name='Data Collection Evidence', index=False)
-            print(
-                f"  ✅ Data Collection Evidence sheet created ({len(evidence_data)} subdomains)")
+    if args.file and len(domains) > 1:
+        print("❌ --file can only be used with a single domain")
+        return
 
-            # NEW SHEET 3: Parameter Coverage Summary
-            # Shows which parameters were checked across all subdomains
-            print("\n  📋 Creating parameter coverage summary...")
-            param_coverage_data = []
+    if args.file and not domains:
+        print("❌ Please provide a domain alongside --file to name the report")
+        return
 
-            for check_id in sorted(CHECKS.keys()):
-                check_info = CHECKS[check_id]
+    if not domains and args.file:
+        return
 
-                # Count across all subdomains
-                total_subdomains = len(results_list)
-                checked_count = 0
-                passed_count = 0
-                failed_count = 0
-                not_applicable_count = 0
+    domains = sorted(domains)
 
-                for result in results_list:
-                    all_checks_dict = result.get('all_checks_dict', {})
-                    relevant_checks = result.get('relevant_checks_list', [])
+    discovery_cache = load_cache(cache_path)
 
-                    if check_id in all_checks_dict:
-                        checked_count += 1
-                        if all_checks_dict[check_id]:
-                            passed_count += 1
-                        else:
-                            failed_count += 1
-                    elif check_id not in relevant_checks:
-                        not_applicable_count += 1
+    args.multi_domain = len(domains) > 1
 
-                param_coverage_data.append({
-                    'Control_ID': check_id,
-                    'Priority': check_info['priority'],
-                    'Description': check_info['desc'],
-                    'Total_Subdomains': total_subdomains,
-                    'Checked': checked_count,
-                    'Passed': passed_count,
-                    'Failed': failed_count,
-                    'Not_Applicable': not_applicable_count,
-                    'Pass_Rate_%': round((passed_count / checked_count * 100) if checked_count > 0 else 0, 1)
-                })
-
-            df_param_coverage = pd.DataFrame(param_coverage_data)
-            df_param_coverage.to_excel(
-                writer, sheet_name='Parameter Coverage Summary', index=False)
-            print(
-                f"  ✅ Parameter Coverage Summary sheet created ({len(param_coverage_data)} parameters)")
-
-            # NEW SHEET: Standards Scores
-            print("\n  📋 Creating standards score sheet...")
-            # Build aggregate pass rates per check across all subdomains
-            pass_counts = {cid: 0 for cid in CHECKS.keys()}
-            check_counts = {cid: 0 for cid in CHECKS.keys()}
-            for result in results_list:
-                all_checks_dict = result.get('all_checks_dict', {})
-                for cid, passed in all_checks_dict.items():
-                    if cid in check_counts:
-                        check_counts[cid] += 1
-                        if passed:
-                            pass_counts[cid] += 1
-
-            def check_pass_rate(cid):
-                total = check_counts.get(cid, 0)
-                return (pass_counts.get(cid, 0) / total) if total > 0 else 0.0
-
-            standards_rows = []
-            for std_name, std_checks in STANDARDS.items():
-                # Only include checks that exist
-                valid_checks = [c for c in std_checks if c in CHECKS]
-                if not valid_checks:
-                    continue
-                rates = [check_pass_rate(c) for c in valid_checks]
-                score_pct = round((sum(rates) / len(rates)) * 100, 1)
-                standards_rows.append({
-                    'Standard': std_name,
-                    'Controls_Mapped': len(valid_checks),
-                    'Score_%': score_pct
-                })
-            df_standards = pd.DataFrame(standards_rows)
-            df_standards.to_excel(
-                writer, sheet_name='Standards Scores', index=False)
-            print(
-                f"  ✅ Standards Scores sheet created ({len(standards_rows)} standards)")
-
-        print(f"\n✅ Results saved to: {output_path}")
-
-        if discovery_stats:
-            print(f"\n📊 Report includes:")
-            print(f"  • Security Results (detailed scores per subdomain)")
-            print(f"  • Active/Inactive Subdomains (separate sheets)")
-            print(f"  • Summary By Type (statistics by subdomain type)")
-            print(f"  • WEBAPP/API/STATIC/OTHER Rankings (sorted by security score)")
-            print(f"  • Discovery Stats (subdomain discovery metrics)")
-            print(f"  • Technologies (detected tech stack per subdomain)")
-            print("  • Checklist (all security parameters)")
-            print(f"  • All Parameters (comprehensive evidence sheet)")
-            print(f"  • Data Collection Evidence (what was tested)")
-            print(f"  • Parameter Coverage Summary (pass/fail rates per check)")
-            print(f"\n🎯 Key Features for Defense:")
-            print(
-                f"  ✅ All parameters for EVERY subdomain (Pass/Fail/Not Applicable)")
-            print(f"  ✅ Data collection evidence (proves what was scanned)")
-            print(f"  ✅ Parameter coverage summary (shows overall security posture)")
-            print(f"  ✅ Context-aware scoring (fair comparison by type)")
-            print(f"  ✅ Risk ratings to prioritize remediation")
-        else:
-            print(f"\n📊 Report includes:")
-            print(f"  • Security Results")
-            print(f"  • Summary By Type")
-            print(f"  • Checklist")
-            print(f"  • All Parameters (comprehensive evidence sheet)")
-            print(f"  • Data Collection Evidence (what was tested)")
-            print(f"  • Parameter Coverage Summary (pass/fail rates per check)")
-
-        print()
-        print("Summary By Type:")
-        print(df_summary.to_string(index=False))
-        print()
-    except Exception as e:
-        print(f"❌ Error writing Excel: {e}")
-        csv_output = output_path.with_suffix('.csv')
-        df_results.to_csv(csv_output, index=False)
-        print(f"Results saved to CSV instead: {csv_output}")
+    if args.domain_workers <= 1 or len(domains) == 1:
+        for domain in domains:
+            print("=" * 80)
+            print(f"Scanning domain: {domain}")
+            print("=" * 80)
+            scan_domain(domain, args, evidence_data, domain_profiles, cache_path, log_path, parallel_mode=False)
+    else:
+        print(f"Scanning {len(domains)} domains in parallel (workers={args.domain_workers})")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.domain_workers) as ex:
+            futures = {ex.submit(scan_domain, d, args, evidence_data, domain_profiles, cache_path, log_path, True): d for d in domains}
+            for fut in concurrent.futures.as_completed(futures):
+                try:
+                    fut.result()
+                except Exception as exc:
+                    print(f"⚠️  Domain scan error for {futures[fut]}: {exc}")
 
 
 if __name__ == "__main__":
