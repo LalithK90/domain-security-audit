@@ -1,0 +1,21 @@
+# Security Scanner Dependencies
+#
+# Core dependencies for the scanner.
+# Minimal set - we don't need much.
+
+# Async HTTP client
+aiohttp>=3.9.0
+
+# Environment variable loading
+python-dotenv>=1.0.0
+
+# Date parsing for certificate validation
+python-dateutil>=2.8.0
+
+# Excel file handling (optional - for reading existing reports and writing output)
+openpyxl>=3.1.0
+
+# Data analysis (optional - only needed if ENABLE_EXCEL=true)
+pandas>=2.0.0
+# DNS resolution
+dnspython>=2.3.0

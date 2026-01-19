@@ -49,6 +49,11 @@ pip-wheel-metadata/
 # macOS
 .DS_Store
 
+# Scanner output and cache
+out/
+*.xlsx
+*.csv
+
 # Backups
 backup/
 docs/
@@ -56,3 +61,11 @@ docs/
 
 *.pid
 *.log
+# Enforce clean root directory structure
+# Only .env and run.sh allowed in root
+# All documentation goes in docs/
+/*.md
+/*.txt
+# All Python code goes in src/
+/*.py
+!run.sh
