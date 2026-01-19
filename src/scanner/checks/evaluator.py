@@ -903,6 +903,13 @@ class CheckEvaluator:
             )
         
         record = dmarc_result.data.get('record', '')
+        
+        # Ensure record is a string (handle case where it might be a dict)
+        if isinstance(record, dict):
+            record = record.get('record', '')
+        if not isinstance(record, str):
+            record = str(record) if record else ''
+        
         dmarc_data = advanced_checks.parse_dmarc_record(record)
         
         is_strong, policy_value = advanced_checks.evaluate_dmarc_policy_strength(dmarc_data)
@@ -1089,7 +1096,7 @@ class CheckEvaluator:
         validation for email delivery. Without it, email can be intercepted.
         """
         # Check for _mta-sts TXT record
-        mta_sts_txt = advanced_checks.get_txt_record(probe_data.get('dns', {}), f'_mta-sts.{target}')
+        mta_sts_txt = advanced_checks.get_txt_record(f'_mta-sts.{target}')
         
         if not mta_sts_txt:
             return CheckResult(
@@ -1183,10 +1190,14 @@ class CheckEvaluator:
         """
         # Check for _smtp._tls TXT record in DNS data
         # The DNS probe should have queried this already
-        dns_data = probe_data.get('dns', {})
+        dns_result = probe_data.get('dns')
         
         # Look for TLS-RPT record in TXT records
-        txt_records = dns_data.get('data', {}).get('txt', [])
+        # ProbeResult is an object with .data attribute, not a dict
+        txt_records = []
+        if dns_result and hasattr(dns_result, 'data'):
+            txt_records = dns_result.data.get('txt', [])
+        
         tls_rpt_txt = None
         
         for record in txt_records:

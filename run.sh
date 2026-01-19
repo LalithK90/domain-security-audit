@@ -64,5 +64,10 @@ echo ""
 echo "Starting scan..."
 python src/app.py
 
+echo ""
+echo "Generating Markdown reports..."
+python generate_reports.py --root out/ac.lk --reports-dir out/ac.lk/REPORTS
+echo "✓ Reports generated in out/ac.lk/REPORTS/"
+
 # Deactivate virtual environment
 deactivate
