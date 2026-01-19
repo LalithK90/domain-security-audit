@@ -102,12 +102,20 @@ class ScanWorker:
                     consecutive_empty += 1
                     
                     if continuous:
+                        # Check if enumeration is complete
+                        enumeration_done = self.state_mgr.get_meta(
+                            'enumeration_done', 'false') == 'true'
+
                         # No jobs available, wait and retry
-                        if consecutive_empty >= stop_when_empty_count:
-                            logger.info(f"No new jobs after {consecutive_empty} polls, scanner worker exiting")
+                        if consecutive_empty >= stop_when_empty_count and enumeration_done:
+                            logger.info(
+                                f"No new jobs after {consecutive_empty} polls and enumeration complete, scanner worker exiting")
                             break
-                        
-                        logger.debug(f"No eligible jobs, waiting {self.config.scan_poll_seconds}s... ({consecutive_empty}/{stop_when_empty_count})")
+                        elif consecutive_empty >= stop_when_empty_count and not enumeration_done:
+                            logger.info(
+                                f"No jobs available but enumeration still running, continuing to poll...")
+                            consecutive_empty = 0  # Reset counter to keep waiting
+
                         logger.debug(f"No eligible jobs, waiting {self.config.scan_poll_seconds}s... ({consecutive_empty}/{stop_when_empty_count})")
                         await asyncio.sleep(self.config.scan_poll_seconds)
                         continue

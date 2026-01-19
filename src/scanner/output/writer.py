@@ -31,15 +31,27 @@ class OutputWriter:
         summary.xlsx               # Optional Excel workbook
     """
     
-    def __init__(self, domain: str, out_dir: str = "out", enable_excel: bool = False):
-        """Initialize writer with output directory."""
+    def __init__(self, domain: str, out_dir: str = "out", enable_excel: bool = False, run_dir: Path = None):
+        """Initialize writer with output directory.
+        
+        Args:
+            domain: Target domain name
+            out_dir: Base output directory (default: 'out')
+            enable_excel: Whether to generate Excel summary (default: False)
+            run_dir: Explicit run directory to use (overrides auto-creation)
+        """
         self.domain = domain
         self.enable_excel = enable_excel
         
-        # Create timestamped output directory
-        base_dir = Path(out_dir) / domain / date_str()
-        self.run_dir = base_dir / timestamp_str()
-        ensure_dir(self.run_dir)
+        if run_dir:
+            # Use explicit run directory from caller (app.py)
+            self.run_dir = Path(run_dir)
+            ensure_dir(self.run_dir)
+        else:
+            # Create timestamped output directory (legacy behavior)
+            base_dir = Path(out_dir) / domain / date_str()
+            self.run_dir = base_dir / timestamp_str()
+            ensure_dir(self.run_dir)
         
         logger.info(f"Output directory: {self.run_dir}")
     
@@ -197,10 +209,22 @@ class OutputWriter:
             logger.info("No errors to write")
     
     def _write_metadata(self, run_metadata: Dict[str, Any], domain_summary: Dict[str, Any]) -> None:
-        """Write run metadata and domain summary to JSON."""
+        """Write run metadata and domain summary to JSON.
+        
+        Unified schema containing:
+        - run_id, domain, timestamps, duration
+        - scanned_count, total_candidates, error_count
+        - config settings
+        - domain_summary (pass_rate, total_checks_run)
+        """
+        # Merge run_metadata and domain_summary into single unified format
         metadata = {
-            'run': run_metadata,
-            'domain_summary': domain_summary
+            # Contains: run_id, domain, started_at, finished_at, duration_seconds, config, etc.
+            **run_metadata,
+            'total_subdomains': domain_summary.get('total_subdomains', 0),
+            'scanned_subdomains': domain_summary.get('scanned_subdomains', 0),
+            'total_checks_run': domain_summary.get('total_checks_run', 0),
+            'overall_pass_rate': round(domain_summary.get('overall_pass_rate', 0.0), 2)
         }
         
         output_file = self.run_dir / "run_metadata.json"

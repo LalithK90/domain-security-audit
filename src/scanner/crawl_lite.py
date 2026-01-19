@@ -55,9 +55,14 @@ class CrawlLite:
         """
         discovered = set()
         
+        headers = {
+            'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)'
+        }
+
         try:
             async with session.get(
                 url,
+                headers=headers,
                 timeout=self.timeout,
                 allow_redirects=True,
                 max_redirects=3,

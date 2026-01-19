@@ -71,6 +71,9 @@ async def main_async(config: Config):
     # Create scan run record
     state_mgr.create_run(run_id, config.to_dict())
     
+    # Reset enumeration_done flag for fresh run
+    state_mgr.set_meta('enumeration_done', 'false')
+
     # Show initial stats
     stats = state_mgr.get_stats()
     logger.info(f"Initial state:")
@@ -156,19 +159,19 @@ async def main_async(config: Config):
         logger.info(f"Exported enumeration methods to {method_counts_csv}")
     
     # Export aggregated scan results (subdomain-level scores)
-    if scanner_worker.scanned_count > 0:
-        subdomain_results_csv = output_dir / "subdomain_metrics.csv"
-        state_mgr.export_scan_results_csv(subdomain_results_csv, run_id)
-        logger.info(f"Exported subdomain metrics to {subdomain_results_csv}")
-        
-        # Extract detailed check results from findings_summary JSON
-        check_observations = state_mgr.get_all_check_results(run_id)
-        subdomain_scores = state_mgr.get_all_scores(run_id)
-        
-        if check_observations:
-            # Convert observations to CheckResult objects for OutputWriter
-            check_results = []
-            for obs in check_observations:
+    # Generate CSVs even if scanned_count=0 (will have headers only)
+    subdomain_results_csv = output_dir / "subdomain_metrics.csv"
+    state_mgr.export_scan_results_csv(subdomain_results_csv, run_id)
+    logger.info(f"Exported subdomain metrics to {subdomain_results_csv}")
+
+    # Extract detailed check results from findings_summary JSON
+    check_observations = state_mgr.get_all_check_results(run_id)
+    subdomain_scores = state_mgr.get_all_scores(run_id)
+
+    if check_observations:
+        # Convert observations to CheckResult objects for OutputWriter
+        check_results = []
+        for obs in check_observations:
                 try:
                     check_results.append(CheckResult(
                         check_id=obs.get('check_id', ''),
@@ -182,73 +185,89 @@ async def main_async(config: Config):
                     ))
                 except (ValueError, KeyError) as e:
                     logger.warning(f"Skipping malformed observation: {e}")
-            
-            # Convert score dicts to SubdomainScore objects
-            score_objects = []
-            for score_dict in subdomain_scores:
-                try:
-                    score_objects.append(SubdomainScore(
-                        target=score_dict['target'],
-                        total_checks=score_dict['total_checks'],
-                        tested_checks=score_dict['tested_checks'],
-                        passed_checks=score_dict['passed_checks'],
-                        failed_checks=score_dict['failed_checks'],
-                        not_tested_checks=score_dict['not_tested_checks'],
-                        not_applicable_checks=score_dict['not_applicable_checks'],
-                        error_checks=score_dict['error_checks']
-                    ))
-                except (ValueError, KeyError) as e:
-                    logger.warning(f"Skipping malformed score: {e}")
-            
-            # Use OutputWriter to generate research-ready CSVs
-            writer = OutputWriter(config.domain, str(config.out_dir), enable_excel=False)
-            
-            # Compute domain-level summary stats
-            domain_summary = {
-                'total_subdomains': stats['total_candidates'],
-                'scanned_subdomains': scanner_worker.scanned_count,
-                'total_checks_run': len(check_results),
-                'overall_pass_rate': (sum(1 for r in check_results if r.status == CheckStatus.PASS) / 
-                                     len([r for r in check_results if r.status in (CheckStatus.PASS, CheckStatus.FAIL)]) * 100)
-                                     if len([r for r in check_results if r.status in (CheckStatus.PASS, CheckStatus.FAIL)]) > 0 else 0.0
+
+        # Convert score dicts to SubdomainScore objects
+        score_objects = []
+        for score_dict in subdomain_scores:
+            try:
+                score_objects.append(SubdomainScore(
+                    target=score_dict['target'],
+                    total_checks=score_dict['total_checks'],
+                    tested_checks=score_dict['tested_checks'],
+                    passed_checks=score_dict['passed_checks'],
+                    failed_checks=score_dict['failed_checks'],
+                    not_tested_checks=score_dict['not_tested_checks'],
+                    not_applicable_checks=score_dict['not_applicable_checks'],
+                    error_checks=score_dict['error_checks']
+                ))
+            except (ValueError, KeyError) as e:
+                logger.warning(f"Skipping malformed score: {e}")
+
+        # Use OutputWriter to generate research-ready CSVs
+        writer = OutputWriter(config.domain, str(
+            config.out_dir), enable_excel=False, run_dir=output_dir)
+
+        # Compute domain-level summary stats
+        domain_summary = {
+            'total_subdomains': stats['total_candidates'],
+            'scanned_subdomains': scanner_worker.scanned_count,
+            'total_checks_run': len(check_results),
+            'overall_pass_rate': (sum(1 for r in check_results if r.status == CheckStatus.PASS) /
+                                  len([r for r in check_results if r.status in (CheckStatus.PASS, CheckStatus.FAIL)]) * 100)
+            if len([r for r in check_results if r.status in (CheckStatus.PASS, CheckStatus.FAIL)]) > 0 else 0.0
+        }
+
+        # Generate all research CSVs (observations, metrics, control_metrics, errors)
+        writer.write_all(
+            check_results=check_results,
+            subdomain_scores=score_objects,
+            domain_summary=domain_summary,
+            run_metadata={
+                'run_id': run_id,
+                'domain': config.domain,
+                'started_at': start_time.isoformat(),
+                'finished_at': datetime.utcnow().isoformat(),
+                'duration_seconds': (datetime.utcnow() - start_time).total_seconds(),
+                'scanned_count': scanner_worker.scanned_count,
+                'total_candidates': stats['total_candidates'],
+                'error_count': scanner_worker.error_count,
+                'rescan_hours': config.rescan_hours,
+                'config': config.to_dict()
             }
-            
-            # Generate all research CSVs (observations, metrics, control_metrics, errors)
-            writer.write_all(
-                check_results=check_results,
-                subdomain_scores=score_objects,
-                domain_summary=domain_summary,
-                run_metadata={
-                    'run_id': run_id,
-                    'domain': config.domain,
-                    'scan_date': datetime.utcnow().isoformat(),
-                    'rescan_hours': config.rescan_hours
-                }
-            )
-            logger.info(f"Generated research CSVs in {writer.get_output_dir()}")
+        )
+        logger.info(f"Generated research CSVs in {writer.get_output_dir()}")
+    else:
+        # No scan results yet, but create empty CSVs with headers
+        writer = OutputWriter(config.domain, str(
+            config.out_dir), enable_excel=False, run_dir=output_dir)
+        writer.write_all(
+            check_results=[],
+            subdomain_scores=[],
+            domain_summary={
+                'total_subdomains': stats['total_candidates'],
+                'scanned_subdomains': 0,
+                'total_checks_run': 0,
+                'overall_pass_rate': 0.0
+            },
+            run_metadata={
+                'run_id': run_id,
+                'domain': config.domain,
+                'started_at': start_time.isoformat(),
+                'finished_at': datetime.utcnow().isoformat(),
+                'duration_seconds': (datetime.utcnow() - start_time).total_seconds(),
+                'scanned_count': 0,
+                'total_candidates': stats['total_candidates'],
+                'error_count': scanner_worker.error_count,
+                'rescan_hours': config.rescan_hours,
+                'config': config.to_dict()
+            }
+        )
+        logger.info(
+            f"Generated empty research CSVs (headers only) in {writer.get_output_dir()}")
     
     # Write run metadata JSON
     end_time = datetime.utcnow()
     duration = (end_time - start_time).total_seconds()
-    
-    metadata = {
-        'run_id': run_id,
-        'domain': config.domain,
-        'started_at': start_time.isoformat(),
-        'finished_at': end_time.isoformat(),
-        'duration_seconds': duration,
-        'total_candidates': stats['total_candidates'],
-        'scanned_count': scanner_worker.scanned_count,
-        'error_count': scanner_worker.error_count,
-        'rescan_hours': config.rescan_hours,
-        'config': config.to_dict()
-    }
-    
-    import json
-    metadata_json = output_dir / "run_metadata.json"
-    with open(metadata_json, 'w') as f:
-        json.dump(metadata, f, indent=2)
-    logger.info(f"Exported metadata to {metadata_json}")
     
     # Final summary
     logger.info("="*60)

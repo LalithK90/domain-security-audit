@@ -119,31 +119,42 @@ class EnumeratorWorker:
             logger.info(f"  All candidates persisted to SQLite")
             logger.info(f"  Scanner can now process eligible targets")
             
+            # Signal enumeration completion for scanner coordination
+            self.state_mgr.set_meta('enumeration_done', 'true')
+            logger.info("  Set enumeration_done=true for scanner coordination")
+
         except Exception as e:
             logger.error(f"Enumerator worker error: {e}", exc_info=True)
         finally:
             self._running = False
     
     def _infer_sources(self, fqdn: str, target) -> list:
-        """Infer discovery sources for a subdomain.
+        """Get actual discovery sources for a subdomain.
         
-        WHY: Track provenance of each subdomain.
-        This is a simplified version - real implementation would track actual sources.
+        WHY: Track provenance of each subdomain for research transparency.
+        Uses the discovered_from attribute set during enumeration.
+        
+        Args:
+            fqdn: The fully qualified domain name
+            target: ScanTarget object with discovered_from attribute
+        
+        Returns:
+            List of discovery source tags (e.g., ['ct_logs'], ['dns_brute'])
         """
         sources = []
         
-        # Get from target if available
-        if hasattr(target, 'discovered_from'):
+        # Get actual source from target (set during enumeration)
+        if hasattr(target, 'discovered_from') and target.discovered_from != "unknown":
             sources.append(target.discovered_from)
         
-        # Simple heuristics (could be enhanced with actual tracking)
-        if fqdn == self.domain:
-            sources.append("base_domain")
-        elif fqdn.startswith("www."):
-            sources.append("common_pattern")
-        
+        # Fallback only if no source was tracked
         if not sources:
-            sources.append("dns_brute_force")
+            # This shouldn't happen with proper enumeration tracking
+            # but provide reasonable fallback
+            if fqdn == self.domain:
+                sources.append("apex_domain")
+            else:
+                sources.append("unknown")
         
         return sources
     

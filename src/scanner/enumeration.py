@@ -130,14 +130,17 @@ async def fetch_crtsh_async(domain: str, session: aiohttp.ClientSession, retries
         Set of discovered subdomains
     """
     url = f"https://crt.sh/?q=%25.{quote(domain)}&output=json"
+    headers = {
+        'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)'
+    }
     results = set()
     
     for attempt in range(1, retries + 1):
         try:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status == 200:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
                     try:
-                        data = await resp.json()
+                        data = await response.json()
                         for cert in data:
                             name_value = cert.get("name_value", "")
                             for d in name_value.split("\n"):
@@ -151,7 +154,8 @@ async def fetch_crtsh_async(domain: str, session: aiohttp.ClientSession, retries
                     except (json.JSONDecodeError, ValueError):
                         logger.warning(f"Failed to parse crt.sh JSON response (attempt {attempt}/{retries})")
                 else:
-                    logger.warning(f"crt.sh returned status {resp.status} (attempt {attempt}/{retries})")
+                    logger.warning(
+                        f"crt.sh returned status {response.status} (attempt {attempt}/{retries})")
                     
             # Wait before retry
             if attempt < retries:
@@ -181,10 +185,14 @@ async def fetch_additional_sources_async(domain: str, session: aiohttp.ClientSes
         'threatcrowd': set()
     }
     
+    headers = {
+        'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; Non-intrusive security posture measurement)'
+    }
+
     # Source 1: HackerTarget API
     try:
         url = f"https://api.hackertarget.com/hostsearch/?q={quote(domain)}"
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
             if resp.status == 200:
                 text = await resp.text()
                 for line in text.split('\n'):
@@ -204,7 +212,7 @@ async def fetch_additional_sources_async(domain: str, session: aiohttp.ClientSes
     # Source 2: ThreatCrowd API
     try:
         url = f"https://www.threatcrowd.org/searchApi/v2/domain/report/?domain={quote(domain)}"
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
             if resp.status == 200:
                 data = await resp.json()
                 if 'subdomains' in data and isinstance(data['subdomains'], list):
@@ -300,11 +308,14 @@ async def is_http_active_async(host: str, session: aiohttp.ClientSession, timeou
     Returns:
         True if host responds to HTTP/HTTPS requests
     """
+    headers = {
+        'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)'
+    }
     urls = [f"https://{host}", f"http://{host}"]
     
     for url in urls:
         try:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout), 
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout),
                                  allow_redirects=True, ssl=False) as resp:
                 # Accept any response (2xx, 3xx, 4xx) as "active"
                 if 200 <= resp.status < 500:
@@ -355,10 +366,10 @@ class TargetEnumerator:
         
         # Check cache first (unless force rescan)
         if not getattr(self.config, 'force_rescan', False):
-            cached_targets = self._from_cache()
+            cached_targets, cached_sources = self._from_cache()
             if cached_targets:
                 logger.info(f"✓ Loaded {len(cached_targets)} targets from cache (24hr TTL)")
-                return self._to_scan_targets(cached_targets)
+                return self._to_scan_targets(cached_targets, cached_sources)
         
         all_discovered = set()
         
@@ -375,8 +386,12 @@ class TargetEnumerator:
             'ptr_reverse_dns': 0
         }
         
+        # Track source attribution per subdomain
+        subdomain_sources = {}  # fqdn -> list of discovery methods
+
         # Always include apex domain
         all_discovered.add(self.domain)
+        subdomain_sources[self.domain] = ['apex_domain']
         method_counts['apex_domain'] = 1
         
         # [0/5] Load XLSX seeds (existing security reports)
@@ -385,6 +400,8 @@ class TargetEnumerator:
         xlsx_seeds = load_xlsx_seeds(self.domain)
         if xlsx_seeds:
             all_discovered.update(xlsx_seeds)
+            for fqdn in xlsx_seeds:
+                subdomain_sources[fqdn] = ['xlsx_seeds']
             method_counts['xlsx_seeds'] = len(xlsx_seeds)
             logger.info(f"      ✓ XLSX Seeds: {len(xlsx_seeds)} subdomains from previous reports")
         else:
@@ -423,6 +440,8 @@ class TargetEnumerator:
             # Safely merge results
             if isinstance(ct_results, set):
                 all_discovered.update(ct_results)
+                for fqdn in ct_results:
+                    subdomain_sources.setdefault(fqdn, []).append('ct_logs')
                 method_counts['ct_logs'] = len(ct_results)
                 logger.info(f"      ✓ Certificate Transparency: {len(ct_results)} subdomains")
             else:
@@ -436,6 +455,13 @@ class TargetEnumerator:
                 all_discovered.update(hackertarget_found)
                 all_discovered.update(threatcrowd_found)
                 
+                for fqdn in hackertarget_found:
+                    subdomain_sources.setdefault(
+                        fqdn, []).append('hackertarget')
+                for fqdn in threatcrowd_found:
+                    subdomain_sources.setdefault(
+                        fqdn, []).append('threatcrowd')
+
                 method_counts['hackertarget'] = len(hackertarget_found)
                 method_counts['threatcrowd'] = len(threatcrowd_found)
                 
@@ -446,6 +472,8 @@ class TargetEnumerator:
             
             if isinstance(dns_results, set):
                 all_discovered.update(dns_results)
+                for fqdn in dns_results:
+                    subdomain_sources.setdefault(fqdn, []).append('dns_brute')
                 method_counts['dns_brute'] = len(dns_results)
                 logger.info(f"      ✓ DNS brute-force: {len(dns_results)} subdomains")
             else:
@@ -456,6 +484,9 @@ class TargetEnumerator:
             srv_results = await discover_srv_subdomains(self.domain)
             if srv_results:
                 all_discovered.update(srv_results)
+                for fqdn in srv_results:
+                    subdomain_sources.setdefault(
+                        fqdn, []).append('srv_records')
                 method_counts['srv_records'] = len(srv_results)
             
             # CRITICAL: Wildcard detection BEFORE testing HTTP
@@ -504,6 +535,9 @@ class TargetEnumerator:
                     max_size=2 * 1024 * 1024
                 )
                 if crawl_results:
+                    for fqdn in crawl_results:
+                        subdomain_sources.setdefault(
+                            fqdn, []).append('crawl_lite')
                     method_counts['crawl_lite'] = len(crawl_results)
                     logger.info(f"      ✓ Discovered {len(crawl_results)} new subdomains from web crawling")
                     all_discovered.update(crawl_results)
@@ -517,6 +551,9 @@ class TargetEnumerator:
             ip_to_fqdn_map = await build_ip_to_fqdn_map(all_discovered)
             ptr_results = await discover_ptr_subdomains(ip_to_fqdn_map, self.domain, timeout=3.0)
             if ptr_results:
+                for fqdn in ptr_results:
+                    subdomain_sources.setdefault(
+                        fqdn, []).append('ptr_reverse_dns')
                 method_counts['ptr_reverse_dns'] = len(ptr_results)
                 logger.info(f"      ✓ Discovered {len(ptr_results)} new subdomains from PTR records")
                 all_discovered.update(ptr_results)
@@ -542,33 +579,61 @@ class TargetEnumerator:
         logger.info("")
         
         # Cache results
-        self._to_cache(all_discovered, method_counts)
+        self._to_cache(all_discovered, method_counts, subdomain_sources)
         
         # Return all discovered (both active and inactive)
         # Scanner will handle failures gracefully
-        return self._to_scan_targets(all_discovered)
-    
-    def _to_scan_targets(self, fqdns: Set[str]) -> List[ScanTarget]:
-        """Convert set of FQDNs to sorted list of ScanTargets."""
-        targets = [ScanTarget(fqdn=fqdn) for fqdn in fqdns]
+        return self._to_scan_targets(all_discovered, subdomain_sources)
+
+    def _to_scan_targets(self, fqdns: Set[str], sources_map: Dict[str, List[str]] = None) -> List[ScanTarget]:
+        """Convert set of FQDNs to sorted list of ScanTargets.
+        
+        Args:
+            fqdns: Set of discovered FQDNs
+            sources_map: Optional mapping of fqdn -> list of discovery methods
+        """
+        targets = []
+        for fqdn in fqdns:
+            # Get primary discovery source (first method that found it)
+            discovered_from = "unknown"
+            if sources_map and fqdn in sources_map:
+                sources = sources_map[fqdn]
+                discovered_from = sources[0] if sources else "unknown"
+            targets.append(ScanTarget(
+                fqdn=fqdn, discovered_from=discovered_from))
+
         # Sort for deterministic ordering
         targets.sort(key=lambda t: t.fqdn)
         return targets
     
-    def _from_cache(self) -> Set[str]:
-        """Load targets from cache."""
+    def _from_cache(self) -> tuple:
+        """Load targets from cache.
+        
+        Returns:
+            Tuple of (set of FQDNs, dict of sources) or (empty set, empty dict)
+        """
         cache_key = f"enumeration:{self.domain}"
         cached = self.cache.get(cache_key)
         
         if cached and 'targets' in cached:
-            return set(cached['targets'])
+            targets = set(cached['targets'])
+            sources = cached.get('subdomain_sources', {})
+            return targets, sources
+
+        return set(), {}
+
+    def _to_cache(self, targets: Set[str], method_counts: Dict[str, int] = None, subdomain_sources: Dict[str, List[str]] = None) -> None:
+        """Save targets to cache (24 hour TTL).
         
-        return set()
-    
-    def _to_cache(self, targets: Set[str], method_counts: Dict[str, int] = None) -> None:
-        """Save targets to cache (24 hour TTL)."""
+        Args:
+            targets: Set of discovered FQDNs
+            method_counts: Statistics of discoveries per method
+            subdomain_sources: Mapping of fqdn -> list of discovery methods
+        """
         cache_key = f"enumeration:{self.domain}"
         cache_data = {'targets': list(targets)}
         if method_counts:
             cache_data['method_counts'] = method_counts
+        if subdomain_sources:
+            cache_data['subdomain_sources'] = subdomain_sources
         self.cache.set(cache_key, cache_data)

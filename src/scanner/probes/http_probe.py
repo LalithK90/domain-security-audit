@@ -39,7 +39,7 @@ class HTTPProbe:
             timeout=timeout,
             connector=connector,
             headers={
-                'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; Non-intrusive security posture measurement; +https://github.com/research-project)'
+                'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)'
             }
         )
         return self

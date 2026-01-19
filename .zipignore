@@ -1,0 +1,18 @@
+# Distribution exclusions for clean zip
+.venv/
+.git/
+.vscode/
+__pycache__/
+__MACOSX/
+out/
+state/
+*.pyc
+*.pyo
+*.db
+*.db-shm
+*.db-wal
+*.log
+.DS_Store
+FIX_SUMMARY.txt
+verify_fix.py
+VERIFICATION_EVIDENCE.txt

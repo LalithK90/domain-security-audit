@@ -666,3 +666,31 @@ class StateManager:
         with self._get_conn() as conn:
             cursor = conn.execute("SELECT fqdn FROM candidates ORDER BY last_seen DESC")
             return [row['fqdn'] for row in cursor.fetchall()]
+
+    def set_meta(self, key: str, value: str):
+        """Set a metadata key-value pair.
+        
+        WHY: Store coordination flags like enumeration_done.
+        """
+        with self._get_conn() as conn:
+            conn.execute("""
+                INSERT INTO meta (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            """, (key, value))
+            conn.commit()
+
+    def get_meta(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Get a metadata value by key.
+        
+        Args:
+            key: Metadata key
+            default: Default value if key not found
+        
+        Returns:
+            Value or default
+        """
+        with self._get_conn() as conn:
+            cursor = conn.execute(
+                "SELECT value FROM meta WHERE key = ?", (key,))
+            row = cursor.fetchone()
+            return row['value'] if row else default
