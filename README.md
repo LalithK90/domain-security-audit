@@ -1085,10 +1085,10 @@ If you use this tool in your research, please cite:
 ```bibtex
 @misc{lk-domain-security-audit,
   title={Large-Scale Security Assessment of .LK Public Domains},
-  author={[Your Name]},
+  author={[KRAL Kahatapitiya, ]},
   year={2026},
   publisher={GitHub},
-  howpublished={\url{https://github.com/yourusername/lk-public-domain-security-audit}}
+  howpublished={\url{https://github.com/lalithk90/lk-public-domain-security-audit}}
 }
 ```
 
@@ -1114,8 +1114,8 @@ For questions, issues, or collaboration:
 
 - **Project**: LK Public Domain Security Audit
 - **Purpose**: Academic research on domain security
-- **Email**: security-research@example.edu
-- **GitHub**: [Project Repository]
+- **Email**: askahatapitiya@gmail.com
+- **GitHub**: [Project Repository](https://github.com/LalithK90/lk-public-domain-security-audit)
 
 ---
 
