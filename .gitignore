@@ -64,9 +64,7 @@ docs/
 *.log
 # Enforce clean root directory structure
 # Only .env and run.sh allowed in root
-# All documentation goes in docs/
-/*.md
-/*.txt
+docs/
 # All Python code goes in src/
 /*.py
 !run.sh
