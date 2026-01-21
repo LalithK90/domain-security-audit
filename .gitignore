@@ -53,6 +53,7 @@ pip-wheel-metadata/
 out/
 *.xlsx
 *.csv
+state/
 
 # Backups
 backup/
