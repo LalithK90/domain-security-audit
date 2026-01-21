@@ -69,3 +69,4 @@ docs/
 # All Python code goes in src/
 /*.py
 !run.sh
+*.docx

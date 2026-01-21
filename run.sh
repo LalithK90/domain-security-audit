@@ -64,10 +64,27 @@ echo ""
 echo "Starting scan..."
 python src/app.py
 
+# Check if scan completed successfully
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "Generating Markdown reports..."
+    python generate_reports.py --root out/ac.lk --reports-dir out/ac.lk/REPORTS
+    
+    if [ $? -eq 0 ]; then
+        echo "✓ Reports generated in out/ac.lk/REPORTS/"
+    else
+        echo "⚠ Warning: Report generation failed or no runs found"
+    fi
+else
+    echo "✗ Scan failed. Skipping report generation."
+    deactivate
+    exit 1
+fi
+
 echo ""
-echo "Generating Markdown reports..."
-python generate_reports.py --root out/ac.lk --reports-dir out/ac.lk/REPORTS
-echo "✓ Reports generated in out/ac.lk/REPORTS/"
+echo "=========================================="
+echo "✓ All tasks completed successfully"
+echo "=========================================="
 
 # Deactivate virtual environment
 deactivate
