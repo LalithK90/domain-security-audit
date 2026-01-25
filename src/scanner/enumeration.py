@@ -1,20 +1,68 @@
-"""Target enumeration - discover subdomains to scan.
+"""Core subdomain enumeration engine - orchestrates multi-method discovery.
 
-MULTI-SOURCE SUBDOMAIN DISCOVERY:
-1. Certificate Transparency (crt.sh) - finds all SSL cert names
-2. Public DNS databases (HackerTarget, ThreatCrowd) - historical data
-3. Smart pattern generation (18,953 patterns) - a-z, aa-zz, aaa-zzz + common words
-4. DNS SRV record enumeration (34 common services)
-5. PTR reverse DNS lookups
-6. HTTP response crawling (HTML/JS/CSP headers)
-7. XLSX seed loading from previous scans
-8. DNS resolution verification (500 concurrent workers)
-9. HTTP/HTTPS active testing (200 concurrent workers)
-10. Wildcard DNS filtering
-11. FQDN normalization and deduplication
-12. Cache results for 24 hours
+PROBLEM STATEMENT:
+Organizations typically have dozens to thousands of subdomains. Finding ALL of them
+for security assessment is non-trivial because:
+1. No single authoritative source exists
+2. Different discovery methods find different subdomains
+3. Coverage varies by organization and how they manage infrastructure
 
-Coverage depends on target; no universal ground truth exists.
+SOLUTION: MULTI-METHOD APPROACH
+We combine 12 complementary discovery techniques:
+
+**Active DNS Methods:**
+- Pattern generation (18,953 patterns): Try common subdomain names via DNS
+- SRV record enumeration: Query DNS for service records (_ldap, _sip, etc.)
+- PTR record enumeration: Reverse-DNS on discovered IPs
+
+**Passive/Third-Party Methods:**
+- Certificate Transparency (crt.sh): All SSL certificates ever issued
+- Public databases (HackerTarget, ThreatCrowd): Historical scanning data
+- XLSX seed loading: Previous scans or known targets
+
+**Active HTTP Methods:**
+- HTTP crawling: Extract links from HTTP responses
+
+**Quality Assurance:**
+- Wildcard detection: Identify and filter false positives
+- DNS validation: Verify candidates actually resolve
+- HTTP/HTTPS testing: Check if web services are active
+- Normalization: Standardize naming (punycode, case, trailing dots)
+- Deduplication: Remove duplicates before writing to database
+
+COVERAGE ANALYSIS:
+Each method has strengths and weaknesses:
+- CT logs: Comprehensive for HTTPS, biased toward public-facing services
+- Brute-force: Finds non-HTTPS subdomains, limited by pattern quality
+- SRV records: Found among organizations using AD/email services
+- PTR records: Dependent on infrastructure documentation
+- Crawling: Biased toward web applications
+
+**Key insight**: No single method finds everything. Combined coverage is
+significantly better. This is why large enterprises often get surprised
+when security researchers find more subdomains than they knew about.
+
+ARCHITECTURE:
+This module acts as the orchestrator:
+1. Initialize components (pattern generator, DNS resolver, crawler, etc.)
+2. Run all methods in parallel where possible
+3. Combine results with deduplication
+4. Apply filtering (wildcards, scope validation)
+5. Output structured results with metadata (source, confidence, validation status)
+
+USAGE FOR RESEARCHERS:
+Study this module to understand:
+- How to combine multiple data sources effectively
+- Importance of parallelization in I/O-heavy operations
+- Pattern generation strategies for DNS brute-force
+- Handling contradictory results from different sources
+- Filtering techniques to avoid false positives
+
+LIMITATIONS:
+- This is reconnaissance only (no exploitation)
+- Coverage depends on passive data availability
+- Some internal/private subdomains will be missed
+- Accuracy varies by domain and hosting model
 """
 
 import logging
@@ -31,6 +79,7 @@ from urllib.parse import quote
 from util.types import ScanTarget
 from util.io import read_json, write_json
 from util.cache import Cache
+from util.config import Config
 from scanner.xlsx_seed import load_xlsx_seeds
 from scanner.wildcard import WildcardDetector, filter_wildcard_results
 from scanner.normalization import normalize_fqdn_set
@@ -46,17 +95,48 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 def generate_smart_patterns(include_3char: bool = True) -> List[str]:
-    """Generate 18,953 smart patterns for comprehensive subdomain brute-force.
+    """Generate 18,953 patterns for comprehensive DNS brute-force subdomain discovery.
     
-    Pattern breakdown:
-    - Single chars: 26 (a-z)
-    - Two chars: 676 (aa-zz)
-    - Three chars: 17,576 (aaa-zzz) - comprehensive brute-force
-    - Numbers: 100+ (0-99, mixed)
-    - Common words: 100+ (api, dev, mail, www, etc.)
+    PATTERN STRATEGY:
+    Rather than trying to guess every possible subdomain name, we use a systematic
+    approach combining common names with exhaustive character enumeration:
     
-    Total: ~18,953 patterns
-    Time: ~2-3 minutes with optimized concurrency
+    **Exhaustive Character Combinations**:
+    - 1-char: a-z (26 subdomains)
+    - 2-char: aa-zz (676 subdomains)
+    - 3-char: aaa-zzz (17,576 subdomains) - optional, adds time
+    - Total: 18,278 systematic patterns
+    
+    **Common/Semantic Names**:
+    - Mail services: mail, webmail, smtp, pop, imap
+    - Web services: www, api, rest, gateway
+    - Infrastructure: admin, portal, api, cdn, cdn1-10
+    - Development: dev, test, staging, uat, qa, prod
+    - Common words: blog, shop, wiki, status, monitor
+    - Numbered services: ns1-ns4, db1-db5, app1-app10
+    - Total: 200+ common names
+    
+    EFFECTIVENESS:
+    This approach finds a good balance between:
+    - Coverage: 18K+ patterns cover most naming schemes
+    - Performance: Can run in 2-3 minutes with 500 parallel workers
+    - Accuracy: Semantic names catch infrastructure, exhaustive patterns
+      catch anything else
+    
+    WHY NOT JUST COMMON WORDS?
+    Common word lists miss organizational naming conventions (api01, srv-dmz-01, etc.).
+    Exhaustive enumeration finds those BUT would take hours. Combining both gives
+    speed + coverage.
+    
+    USAGE NOTES:
+    - Set include_3char=False to speed up testing (skip 17K patterns)
+    - Patterns are deduplicated with common words
+    - Results are cached so repeated brute-force doesn't re-query DNS
+    
+    EDUCATIONAL VALUE:
+    DNS brute-force is a classic reconnaissance technique. Pattern generation is
+    the art of guessing likely subdomain names. This function shows practical
+    thinking: exhaustive is too slow, semantic-only misses things, so combine both.
     """
     patterns = set()
     
@@ -130,8 +210,9 @@ async def fetch_crtsh_async(domain: str, session: aiohttp.ClientSession, retries
         Set of discovered subdomains
     """
     url = f"https://crt.sh/?q=%25.{quote(domain)}&output=json"
+    config = Config()
     headers = {
-        'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)'
+        'User-Agent': config.http_user_agent
     }
     results = set()
     
@@ -185,8 +266,9 @@ async def fetch_additional_sources_async(domain: str, session: aiohttp.ClientSes
         'threatcrowd': set()
     }
     
+    config = Config()
     headers = {
-        'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; Non-intrusive security posture measurement)'
+        'User-Agent': config.http_user_agent
     }
 
     # Source 1: HackerTarget API
@@ -308,8 +390,9 @@ async def is_http_active_async(host: str, session: aiohttp.ClientSession, timeou
     Returns:
         True if host responds to HTTP/HTTPS requests
     """
+    config = Config()
     headers = {
-        'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)'
+        'User-Agent': config.http_user_agent
     }
     urls = [f"https://{host}", f"http://{host}"]
     

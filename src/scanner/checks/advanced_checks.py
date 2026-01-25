@@ -1,11 +1,58 @@
-"""Advanced security checks - subdomain takeover, email quality, security.txt.
+"""Advanced security checks - subdomain takeover, email authentication, security disclosures.
 
-This module implements three additional parameter groups:
-1. Subdomain takeover risk detection (non-intrusive)
-2. Email security quality assessment (MTA-STS, TLS-RPT, DMARC/SPF quality)
-3. Security.txt validation (RFC 9116)
+THREE CHECK CATEGORIES:
 
-All checks follow the existing CheckResult pattern.
+1. **SUBDOMAIN TAKEOVER DETECTION**:
+   - When a CNAME points to a deleted/unclaimed cloud resource, an attacker can
+     claim that resource and serve malicious content from the organization's subdomain
+   - Example: example.com/cdn CNAME→ unclaimed.github.io → attacker claims github.io
+     space → attacker controls example.com/cdn
+   - We check if CNAMEs point to cloud services and if those services are unclaimed
+
+2. **EMAIL AUTHENTICATION QUALITY**:
+   - SPF/DMARC/DKIM prevent email spoofing (someone impersonating your domain)
+   - But BASIC configuration is insufficient. We check for advanced controls:
+     - MTA-STS: Enforces TLS for inbound email
+     - TLS-RPT: Reports TLS failures (reveals attacks)
+     - DMARC policy strength: quarantine/reject vs pass/none
+     - SPF lookup limits: excessive lookups indicate misconfiguration
+   - These checks go beyond "do you have SPF?" to "is it WELL configured?"
+
+3. **SECURITY DISCLOSURES (security.txt)**:
+   - RFC 9116 defines security.txt - a standard way to publish security contacts
+   - Organizations put this at /.well-known/security.txt to tell researchers
+     how to report vulnerabilities responsibly
+   - We check for presence and validity of contact information
+
+WHY THESE CHECKS MATTER:
+
+**Subdomain Takeover**: One of the most exploitable vulnerabilities because:
+- Often overlooked (developers forget about old subdomains)
+- Fully under attacker control (can serve any content)
+- Appears to come from the legitimate domain
+- Easy for attackers to discover and exploit
+
+**Email Authentication**: Email is a common attack vector:
+- Spoofing (pretending to be your domain)
+- Phishing (tricking users into giving credentials)
+- Advanced controls (MTA-STS, TLS-RPT) are rarely deployed but very effective
+
+**Security Disclosure**: Improves responsible vulnerability handling:
+- Researchers know how to contact you responsibly
+- Alternative: widespread disclosure or public exploitation
+- Shows maturity of security posture
+
+IMPLEMENTATION NOTES:
+All checks follow the standard CheckResult pattern for consistency with
+the rest of the check system. They're evaluated the same way, scored the same way.
+
+EDUCATIONAL VALUE:
+These checks show that security control evaluation is multi-layered:
+- Some checks are binary (has/doesn't have)
+- Some checks examine configuration depth
+- Some checks look for evidence of maturity/sophistication
+
+Good security systems combine all three approaches.
 """
 
 import logging

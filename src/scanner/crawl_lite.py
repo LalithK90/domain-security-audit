@@ -1,14 +1,71 @@
-"""
-Crawl-lite: Extract subdomains from HTTP/HTTPS responses.
+"""HTTP crawling for subdomain discovery - passive content extraction.
 
-This module performs lightweight crawling of discovered active HTTP/HTTPS sites
-to extract additional subdomains from:
-- HTML content (links, src attributes, meta tags)
-- JavaScript code (URLs, API endpoints)
-- CSP (Content-Security-Policy) headers
+THE IDEA:
+When we successfully reach a web server, the HTTP response contains clues
+about the website's infrastructure:
+- HTML links point to other services
+- JavaScript loads resources from other subdomains
+- Security headers (CSP, HSTS) reference other domains
+- Comments in HTML sometimes mention infrastructure
 
-The goal is to discover subdomains that don't appear in CT logs or DNS brute-force
-but are referenced in web application code or security headers.
+By parsing these responses, we discover subdomains that might not be:
+- In Certificate Transparency logs (internal services, no HTTPS)
+- In DNS brute-force lists (unusual naming, not common patterns)
+- In any public database
+
+WHAT WE EXTRACT:
+
+1. **HTML Links & References**:
+   - <a href=""> tags
+   - <img src=""> tags
+   - <script src=""> tags
+   - <link href=""> tags
+   - JSON-LD (structured data)
+
+2. **JavaScript Code**:
+   - API endpoint URLs
+   - XHR/Fetch calls
+   - Asset references
+   - Configuration URLs
+
+3. **Security Headers**:
+   - Content-Security-Policy (lists allowed domains)
+   - Strict-Transport-Security (might reference other subdomains)
+   - X-Frame-Options (might reference parent domains)
+
+4. **HTML Comments**:
+   - Sometimes developers leave comments with URLs
+   - Configuration or debugging info
+
+IMPORTANT NOTES:
+
+This is "lite" crawling - NOT a full web crawler:
+- We only request ONE page per domain (just the root / or https://)
+- We don't follow links (would be infinite crawling)
+- We don't execute JavaScript (would need a real browser)
+- We extract domains with simple regex (conservative, not perfect)
+
+PRIVACY & ETHICS:
+- This is passive (we only read responses we request)
+- We use respectful User-Agent and reasonable timeouts
+- Academic research context clearly stated
+- No rate-limiting bypass or aggressive techniques
+
+EFFECTIVENESS:
+Results vary wildly by organization:
+- Company blogs: lots of internal links → many subdomains
+- Static sites: minimal links → few discoveries
+- APIs: often contain internal references → good results
+- Load balancers: might return generic pages → few discoveries
+
+USAGE:
+Called after DNS enumeration to find additional targets that pure DNS methods miss.
+Complements other discovery methods - not a replacement.
+
+EDUCATIONAL VALUE:
+Shows that domain enumeration isn't just about DNS. Web applications leak
+information about their infrastructure through responses, headers, and content.
+Good security practice: sanitize responses to not leak infrastructure details.
 """
 
 import asyncio
@@ -18,6 +75,7 @@ import aiohttp
 from aiohttp import ClientSession, ClientTimeout, ClientError
 
 from .normalization import extract_subdomains_from_text
+from util.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +93,7 @@ class CrawlLite:
         """
         self.timeout = ClientTimeout(total=timeout)
         self.max_size = max_size
+        self.config = Config()
         
     async def crawl_url(
         self,
@@ -56,7 +115,7 @@ class CrawlLite:
         discovered = set()
         
         headers = {
-            'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)'
+            'User-Agent': self.config.http_user_agent
         }
 
         try:

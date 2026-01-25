@@ -1,20 +1,47 @@
-"""Wildcard DNS detection - prevents false positive subdomain discoveries.
+"""Wildcard DNS detection - critical for accurate subdomain enumeration.
 
-WHY THIS IS CRITICAL:
-- Some domains have wildcard DNS (* A record) that resolves anything
-- Example: *.example.com → 192.168.1.1
-- Without detection, we'd report thousands of fake subdomains
-- Must test BEFORE reporting discoveries
+THE PROBLEM:
+Some domain administrators configure DNS with a wildcard record:
+    *.example.com A 192.168.1.1
 
-HOW IT WORKS:
-1. Query random non-existent subdomains (e.g., "random-uuid-12345.example.com")
-2. If they resolve, the domain has wildcard DNS
-3. Check if wildcard returns consistent IPs
-4. Filter out any discoveries that match wildcard IPs
+This means ANY non-existent subdomain you query will resolve:
+    random123.example.com → 192.168.1.1
+    fakeserver.example.com → 192.168.1.1
+    thisdoesnotexist.example.com → 192.168.1.1
 
-REFERENCES:
-- RFC 4592 (Wildcard DNS)
-- Subdomain enumeration best practices
+Without detecting this, our DNS brute-force would report thousands of "discovered"
+subdomains that don't actually exist - all false positives. We'd corrupt our
+analysis and waste time scanning non-existent targets.
+
+HOW WE SOLVE IT:
+We test with known non-existent subdomains (random UUIDs). If they resolve, we
+know the domain has wildcard DNS. We then check what IPs it resolves to, and
+filter out any discoveries that match those wildcard IPs.
+
+IMPLEMENTATION APPROACH:
+1. Query 5 random, definitely-not-real subdomains (e.g., "uuid-1234567-random.example.com")
+2. If ANY of them resolve, domain has wildcard DNS
+3. Record the resolved IPs (the "wildcard IPs")
+4. Later, during enumeration, if we find a subdomain that resolves to these
+   same IPs, we skip it (likely a false positive)
+
+EDGE CASES WE HANDLE:
+- Inconsistent wildcards: Some wildcard implementations randomize IPs - we
+  detect if IPs are inconsistent and handle that case
+- Partial wildcards: Some only apply to certain subdomain levels
+  (_tcp.example.com has wildcard, but *.tcp.example.com doesn't)
+- Round-robin DNS: Wildcard might return different IPs on each query
+  (we detect this by testing multiple times)
+
+USAGE FOR RESEARCHERS:
+This is a great example of defensive engineering in enumeration. Before
+implementing any new discovery method, always ask: "Can this produce
+false positives?" Usually, the answer is yes. Wildcard detection is one
+technique. Others include: TTL analysis, response consistency checking, etc.
+
+REFERENCE:
+RFC 4592 (https://tools.ietf.org/html/rfc4592) documents wildcard DNS
+records in detail if you want to understand the DNS spec better.
 """
 
 import dns.resolver

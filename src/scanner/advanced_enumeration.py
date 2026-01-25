@@ -1,11 +1,69 @@
-"""Advanced subdomain enumeration with validation, confidence scoring, and multi-source discovery.
+"""Advanced subdomain enumeration - multi-method discovery with confidence scoring.
 
-This module implements a comprehensive subdomain discovery system with:
-- 10+ discovery methods (CT logs, brute-force, passive sources, crawling)
-- Wildcard DNS detection and handling
-- DNS/HTTP validation with confidence tiers
-- Source attribution and deduplication
-- Structured output for research and analysis
+MOTIVATION:
+Subdomain enumeration is not one technique. It's a combination of 12+ complementary
+methods, each finding different targets:
+- Certificate Transparency: finds SSL-enabled subdomains
+- DNS brute-force: finds configured but maybe inactive subdomains
+- SRV records: finds service infrastructure
+- PTR records: finds reverse-DNS registered targets
+- HTTP crawling: finds references in web content
+- etc.
+
+Using only one method gives incomplete results. For research into domain security,
+we need comprehensive coverage. This module coordinates all methods and combines
+results with confidence scoring.
+
+DESIGN PHILOSOPHY:
+Rather than implementing enumeration ourselves, we leverage existing, proven
+tools and methods:
+- dnspython: industry-standard DNS library
+- aiohttp: async HTTP client for parallel requests
+- Existing enumeration modules (SRV, PTR, crawling, etc.)
+
+Each method is independent and can run in parallel. Results are normalized,
+deduplicated, and scored for confidence.
+
+CONFIDENCE SCORING:
+Not all discoveries are equally reliable:
+- CT logs (High): Authoritative source - cert must exist to be listed
+- DNS resolution (Medium): Domain resolves, but could be misconfigured
+- PTR records (Low): Just a reverse DNS claim, not verified
+- Crawled links (Low): Could be stale or reference external domains
+
+We track confidence so researchers can filter by reliability.
+
+DISCOVERY METHODS INCLUDED:
+1. **Certificate Transparency** - Query crt.sh for all SSL certificates
+2. **Public Databases** - HackerTarget, ThreatCrowd, etc.
+3. **DNS Brute-Force** - Try 18,953 patterns against DNS
+4. **SRV Records** - Query 34 common services
+5. **PTR Records** - Reverse DNS on discovered IPs
+6. **HTTP Crawling** - Extract links from web responses
+7. **Wildcard Detection** - Identify and filter false positives
+8. **Source Attribution** - Track which method found each target
+9. **Normalization** - Standardize and deduplicate
+10. **Validation** - DNS/HTTP verification of candidates
+
+RESEARCH OUTPUT:
+Results include not just the list of subdomains, but metadata about each:
+- Confidence level
+- Discovery method(s)
+- First seen date
+- Validation status
+- IP addresses and CNAMEs
+
+This enables secondary research: "Which methods are most effective for .lk?"
+"Do CT logs miss as many subdomains as brute-force?" "What's the overlap
+between methods?"
+
+USAGE FOR STUDENTS & RESEARCHERS:
+Study this module to understand:
+- How to combine multiple data sources
+- Importance of deduplication
+- Confidence scoring in security research
+- Handling edge cases (wildcards, inconsistent DNS, etc.)
+- Parallelizing I/O-intensive operations
 """
 
 import logging

@@ -1,15 +1,65 @@
-"""XLSX Seed Loader - Load existing security reports as initial seeds.
+"""XLSX seed loading - importing previous scan results as starting points.
 
-WHY THIS EXISTS:
-- Previous manual scan reports contain validated subdomains
-- Real source attribution ("xlsx_seed") for reproducibility
-- Jump-start enumeration with known-good targets
-- Avoids duplicate work
+USE CASE:
+In real-world security research, you often have previous scans or reports
+from manual assessments. Why waste time re-discovering subdomains you already
+know about? Instead, load them as seeds to jump-start enumeration.
 
-EXPECTED FORMATS:
-1. *_security_report.xlsx with "Subdomains" or "Targets" sheet
-2. master_tracker.xlsx with domain inventory
-3. Any Excel with FQDN column
+PRACTICAL SCENARIO:
+1. Your organization previously scanned example.com
+2. They generated a report with "Subdomains" sheet containing 500 targets
+3. You're doing a new comprehensive scan and want to include those 500
+4. Use XLSX loader to import them, avoiding duplicate discovery work
+
+SUPPORTED FORMATS:
+We try to be flexible about Excel format since different tools export
+differently:
+
+**Format A** (Specialized security reports):
+- Sheet names: "Subdomains", "Targets", "Results", "Scan Results"
+- Column names: "fqdn", "subdomain", "domain", "host", "target"
+- Example: "Subdomains" sheet with "fqdn" column containing www.example.com
+
+**Format B** (Inventory spreadsheets):
+- Any Excel file with FQDN-like values
+- We look for cells that look like domain names
+- Values are normalized and validated
+
+WORKFLOW:
+1. Place Excel files in ./reports/, ./out/{domain}/, or specify path
+2. run_enumerator() automatically looks for XLSX files
+3. Found subdomains are added to the DB with source="xlsx_seed"
+4. This allows researchers to:
+   - Track which subdomains came from previous scans
+   - Correlate findings across time
+   - Merge results from multiple sources
+
+SOURCE ATTRIBUTION:
+Each imported subdomain is marked with source="xlsx_seed", NOT a specific
+sheet or file. This is deliberate: we're acknowledging the source is external
+Excel data, without creating too many source tags. Researchers can check
+the database directly if they need details.
+
+TECHNICAL NOTES:
+- Requires openpyxl library (optional dependency)
+- Handles missing sheets gracefully
+- Skips temp files (starting with ~ or .)
+- Validates all values are valid domain names
+- Deduplicates before returning
+
+EDUCATIONAL VALUE:
+Shows importance of data integration in security research. Real systems
+often have data from multiple tools and timeframes. Combining them requires:
+- Flexible parsing (many Excel layouts)
+- Normalization (ensure consistent format)
+- Source tracking (where did this come from?)
+- Deduplication (avoid duplicates)
+
+EXAMPLE USAGE:
+    # Previous report has 500 known subdomains
+    discovered_seeds = load_xlsx_seeds("example.com")  # Returns 500 FQDNs
+    # Later, other discovery methods find 1200 new subdomains
+    # Total: ~1700 targets to scan
 """
 
 import logging

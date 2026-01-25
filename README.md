@@ -24,6 +24,23 @@ This is an academic research project for comprehensive security auditing of publ
 10. [Configuration](#configuration)
 11. [Technical Details](#technical-details)
 12. [Research Applications](#research-applications)
+13. [Documentation Approach](#documentation-approach)
+
+---
+
+## 📚 Documentation Approach
+
+This project's source code documentation is intentionally designed to **educate rather than just document**. Each module explains:
+
+- **Why** it exists (the problem it solves, not just what it does)
+- **How** it works (with real examples and practical scenarios)
+- **What** it teaches about domain security research methodology
+- **Limitations** and edge cases (honest assessment of constraints)
+- **Design decisions** and the trade-offs we made
+
+Instead of generic descriptions like "this module discovers subdomains," we explain why combining 12 different discovery methods is necessary, which method finds what, and what gaps remain. This approach helps students and security researchers understand the *thinking* behind security research, not just the mechanics.
+
+The documentation was refined through a thoughtful process: we replaced standard AI-generated patterns with human-written explanations grounded in real security concepts. Each module now tells a story about why that component matters for domain security auditing.
 
 ---
 
@@ -490,6 +507,9 @@ RESCAN_HOURS=24
 ERROR_RETRY_HOURS=6
 CACHE_TTL_HOURS=24
 LOG_LEVEL=INFO
+
+# User-Agent for HTTP requests (responsible disclosure)
+HTTP_USER_AGENT=LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)
 ```
 
 ### Step 3: Run Setup Script
@@ -874,9 +894,9 @@ PRAGMA busy_timeout=10000;      -- 10s lock timeout
 ### Security & Privacy
 
 **User Agent**:
-```
-LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)
-```
+Configurable via `HTTP_USER_AGENT` in `.env` (default: `LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)`)
+
+The User-Agent header identifies your scanner to domain admins in their server logs, promoting transparent, responsible security research.
 
 **Rate Limiting**:
 - Default: 0.05s delay between requests
@@ -1104,12 +1124,43 @@ If you use this tool in your research, please cite:
 ```bibtex
 @misc{lk-domain-security-audit,
   title={Large-Scale Security Assessment of .LK Public Domains},
-  author={[KRAL Kahatapitiya, ]},
+  author={Kahatapitiya, Lalith},
   year={2026},
   publisher={GitHub},
   howpublished={\url{https://github.com/lalithk90/lk-public-domain-security-audit}}
 }
 ```
+
+### Project Team & Credits
+
+**Lead Developer & Research**:
+- Lalith Kahatapitiya (@lalithk90, Website: lalithk90.github.io)
+  - LinkedIn: https://www.linkedin.com/in/lalithk90
+
+**Core Research Team**:
+- Thiwanka U - https://www.linkedin.com/in/thiwankau/
+- Pamuditha Leo - https://www.linkedin.com/in/pamuditha-leo/
+- Aparna Thewarapperuma - https://www.linkedin.com/in/aparna-thewarapperuma-834ab824a/
+- Tuwan Jaleel - https://www.linkedin.com/in/tuwan-jaleel-1o1/
+
+### Documentation & Code Clarity
+
+This project's comprehensive, educational documentation was developed with the assistance of **GitHub Copilot**, an AI-powered code completion and documentation tool. Copilot helped with:
+
+- Initial code structure and suggestions
+- Documentation framework and organization
+- Code examples and explanations
+
+**Important note**: While Copilot provided valuable assistance, every line of final documentation was carefully reviewed, refined, and validated by the research team to ensure:
+
+- Accuracy of security concepts and methodologies
+- Real-world relevance and practical applicability
+- Transparency about technical design decisions
+- Educational effectiveness for teaching domain security research
+
+The documentation transformation from generic patterns to human-centered explanations with real examples and design rationale was a deliberate team effort to make this codebase serve as an effective learning resource.
+
+**Team's role**: Research, validation, refinement, and human-centered documentation that explains not just *what* the code does, but *why* security researchers make specific choices.
 
 ---
 

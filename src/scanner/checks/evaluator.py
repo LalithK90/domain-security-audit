@@ -65,7 +65,16 @@ class CheckEvaluator:
     async def evaluate_all_async(self, target: str, probe_data: Dict[str, Any]) -> List[CheckResult]:
         """Evaluate all applicable checks for a target (async version).
         
-        WHY async: Some checks (MTA-STS, security.txt) need to fetch resources.
+        DESIGN RATIONALE:
+        Some security checks require additional network requests beyond the base
+        probes (DNS, HTTP, TLS, Email). Examples:
+        - MTA-STS check needs to fetch and parse the MTA-STS policy document
+        - TLS-RPT check needs to fetch the TLS reporting policy
+        - security.txt check needs to fetch /.well-known/security.txt
+        
+        Running these synchronously (one at a time) would be very slow for many
+        targets. Using async/await lets us run all additional checks in parallel,
+        dramatically improving performance. This is why the evaluator itself is async.
         
         Args:
             target: The target being checked (FQDN)

@@ -1,15 +1,51 @@
-"""
-PTR Record Pivoting: Reverse DNS subdomain discovery.
+"""Reverse DNS (PTR) discovery - finding subdomains via IP addresses.
 
-This module performs reverse DNS lookups (PTR records) on all discovered IP addresses
-to find additional subdomains that may not appear in CT logs or DNS brute-force.
+THE TECHNIQUE:
+Forward DNS tells us what IP a domain name resolves to:
+    nslookup www.example.com → 192.168.1.1
 
-PTR records map IP addresses back to hostnames, revealing:
-- Load balancer configurations
-- CDN endpoints
-- Shared hosting arrangements
-- Infrastructure naming conventions
-- Virtual hosts on the same IP
+Reverse DNS (PTR records) tells us what domain names an IP claims:
+    nslookup 192.168.1.1 → www.example.com, cdn.example.com, mail.example.com
+
+PTR discovery exploits this: after we resolve some subdomains to IPs, we ask
+those IPs "what domain names do you belong to?" - often revealing other
+subdomains we haven't discovered yet.
+
+PRACTICAL SCENARIOS:
+
+1. **Shared Hosting**: Multiple domains on one IP
+   - We discover mail.example.com → resolves to 1.2.3.4
+   - Query PTR for 1.2.3.4 → returns mail.example.com, admin.example.com,
+     backup.example.com
+
+2. **Load Balancing**: One service across multiple IPs
+   - We discover api.example.com → resolves to 1.2.3.4
+   - Query 1.2.3.4 → returns api1.example.com, api2.example.com (internal names)
+
+3. **Content Delivery Networks (CDNs)**:
+   - cdn.example.com → points to CDN IP range
+   - Query CDN IP → might return cdn1, cdn2, cdn-backup, etc.
+
+4. **Infrastructure Disclosure**:
+   - Sometimes PTR reveals internal naming: prod-db-01.example.com, or
+     shows admin infrastructure: admin-console, management-api, etc.
+
+IMPORTANT LIMITATIONS:
+- Not all IPs have PTR records (especially public cloud providers)
+- PTR records aren't always accurate or maintained
+- Some reverse DNS queries are intentionally disabled for security
+- This is passive (queries public DNS), not intrusive
+
+EDUCATIONAL VALUE:
+PTR discovery demonstrates the importance of thinking about domain discovery
+from multiple angles. Forward DNS, reverse DNS, CT logs, brute-force - each
+method finds different targets. Combined, they give much better coverage
+than any single method alone.
+
+USAGE IN THIS CODEBASE:
+We call PTR discovery after DNS enumeration completes, using all resolved
+IPs from our discovered subdomains as input. It's one of 12+ enumeration
+techniques we combine for comprehensive coverage.
 """
 
 import asyncio

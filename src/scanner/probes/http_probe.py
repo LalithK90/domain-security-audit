@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from util.types import ProbeResult
 from util.time import now_utc, duration_ms
 from util.cache import Cache
+from util.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class HTTPProbe:
         """Initialize HTTP probe with cache and timeout."""
         self.cache = cache
         self.timeout = timeout
+        self.config = Config()
         self.session: Optional[aiohttp.ClientSession] = None
     
     async def __aenter__(self):
@@ -39,7 +41,7 @@ class HTTPProbe:
             timeout=timeout,
             connector=connector,
             headers={
-                'User-Agent': 'LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)'
+                'User-Agent': self.config.http_user_agent
             }
         )
         return self

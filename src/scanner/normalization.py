@@ -1,22 +1,47 @@
-"""FQDN normalization - ensures consistent candidate format.
+"""FQDN normalization - standardizing domain names for consistent analysis.
 
-WHY THIS IS CRITICAL:
-- Prevents duplicates: "Example.COM" vs "example.com" vs "example.com."
-- Enables proper matching: "_dmarc.example.com" vs "example.com"
-- Handles internationalized domains: "münchen.de" → "xn--mnchen-3ya.de"
-- Research reproducibility: consistent canonical form
+WHY THIS MATTERS:
+Domain names can be written many different ways that technically refer to the
+same target, causing duplicate records and analysis problems:
 
-NORMALIZATION STEPS (in order):
-1. Punycode conversion (IDN → ASCII)
-2. Lowercase conversion
-3. Strip trailing dot
-4. Validate DNS name format
-5. Verify suffix matches base domain
+    "www.Example.COM." vs "www.example.com" vs "WWW.EXAMPLE.COM"
+    
+All three refer to the same subdomain. Without normalization, we'd create 3
+separate database records, waste time scanning the same target 3 times, and
+skew our statistics.
+
+Even trickier: international domains (IDN)
+    "münchen.example.com" vs "xn--mnchen-3ya.example.com"
+
+These are the same domain name, but one uses Unicode and one uses Punycode
+(ASCII-compatible encoding). Our DNS system only understands Punycode, so we
+need to convert. Without this, DNS lookups fail.
+
+NORMALIZATION PIPELINE:
+Our approach converts everything to a canonical form:
+1. Strip URLs: "http://www.example.com/path?query=1" → "www.example.com"
+2. Punycode: Convert IDN (Unicode) domains to ASCII-safe Punycode format
+3. Lowercase: "EXAMPLE.COM" → "example.com"
+4. Strip trailing dots: "example.com." → "example.com"
+5. Validate format: Check it's a legal DNS name (RFC 1035)
+6. Verify suffix: Ensure it ends with our base domain (no "random.com")
+
+USAGE IN CODEBASE:
+This is called early in enumeration, right after discovering new subdomains.
+Invalid or out-of-scope FQDNs are rejected before writing to the database.
+Prevents pollution of the scan queue with garbage data.
+
+RESEARCH APPLICATIONS:
+Normalization is often overlooked but critical for:
+- Reproducibility: Same domain always produces same representation
+- Deduplication: Comparing datasets from different tools
+- International domain support: Real-world domains include non-ASCII chars
+- Data quality: Preventing false statistics from duplicate records
 
 REFERENCES:
-- RFC 3492 (Punycode)
-- RFC 1035 (DNS names)
-- RFC 5890 (Internationalized domain names)
+- RFC 3492: Punycode (IDN encoding)
+- RFC 1035: DNS name format rules
+- RFC 5890: Internationalized domain names in applications
 """
 
 import re

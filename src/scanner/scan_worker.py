@@ -1,17 +1,62 @@
-"""Scanner worker pool (consumer).
+"""Scanner worker - the "consumer" side of parallel scanning.
 
-WHY THIS EXISTS:
-- Claims eligible targets from SQLite queue atomically
-- Respects rescan policy (don't rescan until RESCAN_HOURS elapsed)
-- Bounded concurrency (won't overload system)
-- Crash-safe (lease timeouts recover stuck jobs)
-- Runs in parallel with enumerator (processes discoveries as they arrive)
+ROLE IN THE SYSTEM:
+The scanner is the consumer in a producer-consumer pattern. While the enumerator
+discovers new subdomains, the scanner continuously pulls eligible targets from
+the SQLite queue, runs security probes against them, evaluates security checks,
+and records results.
 
-SCANNING FLOW:
-1. Claim batch of eligible targets (atomic SQL query)
-2. Run probing + checks for each target
-3. Mark complete with next_scan_time
-4. Repeat until no more eligible targets
+KEY CHARACTERISTICS:
+
+1. **Atomic Job Claims**: The scanner claims targets atomically using SQLite
+   transactions. This prevents two workers from scanning the same target,
+   even if running in parallel. If the scanner crashes mid-scan, the lease
+   timeout allows other instances to reclaim the job.
+
+2. **Respects Rescan Policy**: A target might be scanned today and again next
+   week (if RESCAN_HOURS=168). The scanner queries the DB for targets that
+   are either never scanned or due for re-scan. This avoids wasting resources
+   on targets that were just checked.
+
+3. **Probe Pipeline**: For each target, the scanner runs 4 probes in order:
+   - DNS: Can we resolve the domain? What IPs?
+   - HTTP: Is there a web service? What headers?
+   - TLS: Valid certificate? What protocol version?
+   - Email: SPF/DMARC records? MTA-STS policy?
+
+4. **Check Evaluation**: After probes complete, the evaluator runs 30+ security
+   checks. Each check examines probe data and renders a Pass/Fail/Error/N/A
+   result. Results are scored into risk levels (Low/Medium/High/Critical).
+
+5. **Continuous vs Batch Modes**:
+   - Continuous: Keep polling for new targets as they appear
+   - Batch: Process all current targets, then exit
+   This allows flexibility: one-shot scans OR continuous monitoring.
+
+6. **Crash Recovery**: If a scanner crashes mid-scan, the SQLite lease on
+   that target expires after LEASE_MINUTES. The next scanner instance will
+   reclaim and reprocess it. No data loss, fully resumable.
+
+USAGE EXAMPLE:
+    # Run scanner in continuous mode (processes discoveries as they arrive)
+    async def scan():
+        state_mgr = StateManager(domain="example.com", ...)
+        result = await run_scanner_worker(
+            "example.com", state_mgr, config, run_id,
+            continuous=True
+        )
+        print(f"Scanned {result.scanned_count} targets")
+
+WHY MULTIPLE PROBES:
+Each probe tests a different protocol layer. DNS tells us IF the domain exists.
+HTTP tells us if it's web-accessible. TLS checks certificate validity. Email
+checks authentication records. Together, they give a complete picture of the
+security posture.
+
+THREADING MODEL:
+Uses asyncio for I/O concurrency. All 4 probes run in parallel when possible.
+The batch claim + scan loop allows multiple workers to run if needed, each
+claiming different targets from the queue.
 """
 
 import logging

@@ -1,20 +1,49 @@
-"""Continuous subdomain enumerator (producer).
+"""Subdomain enumerator worker - discovers targets for security scanning.
 
-WHY THIS EXISTS:
-- Discovers subdomains ONCE and persists them (no rediscovery every run)
-- Runs in parallel with scanner (producer/consumer model)
-- Uses existing enumeration logic but writes to SQLite instead of returning list
-- Supports incremental discovery (add new subdomains as found)
+ARCHITECTURE PATTERN:
+This module implements the "producer" side of the producer-consumer pattern.
+While the scanner runs (consumer), the enumerator continuously discovers new
+subdomains and writes them to SQLite. The scanner consumes these discoveries
+in real-time, maximizing parallelism and throughput.
 
-DISCOVERY FLOW:
-1. Check if enumeration ran recently (last 24h) => use cache
-2. If stale, run full enumeration:
-   - CT logs (crt.sh)
-   - Public databases (HackerTarget, ThreatCrowd)
-   - DNS brute-force (18,991 patterns)
-   - Wildcard detection
-3. Write each discovered subdomain to SQLite immediately
-4. Scanner can consume discoveries in real-time (no waiting for completion)
+KEY DESIGN DECISIONS:
+
+1. **Persistent Discovery**: Discovered subdomains are written to SQLite
+   immediately, not held in memory. This lets the scanner start processing
+   targets before enumeration completes - significant time savings for large
+   domain scans.
+
+2. **One-Time Discovery**: We don't re-discover subdomains every run. Once
+   a subdomain is in the database, the scanner determines when (if ever) to
+   re-scan it based on the RESCAN_HOURS policy. This avoids wasting API calls
+   and network bandwidth on repeated discoveries.
+
+3. **Multiple Methods**: We combine 12 enumeration techniques:
+   - Certificate Transparency logs (crt.sh) - what's been SSL-certified
+   - Public DNS databases (HackerTarget, ThreatCrowd) - historical records
+   - DNS brute-force with 18,953 patterns - systematic coverage
+   - SRV record enumeration - service discovery
+   - PTR reverse DNS - infrastructure mapping
+   - HTTP crawling - link extraction from web pages
+   - Wildcard detection - avoids false positives
+
+4. **Source Tracking**: Each discovered subdomain records HOW it was found
+   (ct_logs, dns_brute, srv_pivot, etc.). This is essential for research,
+   enabling analysis of method effectiveness and proper attribution.
+
+USAGE EXAMPLE:
+    # Run in parallel with scanner
+    async def main():
+        state_mgr = StateManager(domain="example.com", ...)
+        scanner_task = asyncio.create_task(run_scanner(...))
+        enum_count, methods = await run_enumerator("example.com", ..., state_mgr)
+        await scanner_task
+        # Results in out/example.com/YYYY-MM-DD/HHMMSS/
+
+WHY ASYNC:
+Large-scale enumeration means many I/O operations (API calls, DNS queries,
+HTTP requests). Async/await lets us run hundreds of these in parallel without
+creating an OS thread for each one - much more memory-efficient.
 """
 
 import logging

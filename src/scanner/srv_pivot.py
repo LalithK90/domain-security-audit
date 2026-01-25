@@ -1,23 +1,66 @@
-"""SRV Record Pivoting - discover services via DNS SRV records.
+"""SRV Record Discovery - finding services and infrastructure subdomains.
 
-WHY THIS EXISTS:
-- SRV records reveal services running on subdomains
-- Examples: _ldap._tcp.example.com, _sip._tcp.example.com
-- Often points to admin/infrastructure subdomains
-- Complements other enumeration methods
+WHAT ARE SRV RECORDS:
+SRV (Service) records are DNS records that specify the location of services.
+Instead of just mapping a hostname to an IP, they answer: "where can I find
+the LDAP service for this domain?" or "where's the SIP server?"
 
-COMMON SRV RECORDS:
-- _ldap._tcp (LDAP/Active Directory)
-- _kerberos._tcp (Kerberos authentication)
-- _sip._tcp, _sip._udp (VoIP/SIP)
-- _xmpp-server._tcp (XMPP/Jabber)
-- _caldav._tcp, _carddav._tcp (Calendar/Contacts)
-- _imap._tcp, _imaps._tcp, _pop3._tcp (Email)
-- _submission._tcp (Email submission)
-- _autodiscover._tcp (Exchange/Office 365)
+Example SRV records:
+    _ldap._tcp.example.com SRV 0 0 389 ldap-server.example.com
+    _sip._tcp.example.com SRV 0 0 5060 voip-server.example.com
 
-REFERENCE:
-- RFC 2782 (SRV Records)
+This tells applications (LDAP clients, VoIP phones) exactly where those
+services are hosted.
+
+WHY THIS HELPS ENUMERATION:
+SRV records often point to infrastructure subdomains that aren't in Certificate
+Transparency logs (they might not have SSL certificates) and might not show
+up in basic DNS brute-force:
+
+    Example: mail.example.com might be an alias that's in CT logs and DNS brute-force
+    But: _ldaps._tcp.example.com only appears in SRV records
+    Query SRV: _ldaps._tcp → points to mail-internal.example.com
+
+We discover subdomains by querying 34 common services and collecting the
+target hostnames they point to.
+
+COMMON SERVICES WE CHECK (34 total):
+
+**Directory & Authentication:**
+- _ldap._tcp, _ldaps._tcp (LDAP/Active Directory)
+- _kerberos._tcp (Kerberos auth server)
+- _gc._tcp (Active Directory Global Catalog)
+- _kpasswd._tcp (Kerberos password server)
+
+**Communication:**
+- _xmpp-server._tcp, _xmpp._tcp (XMPP/Jabber)
+- _sip._tcp, _sips._tcp (VoIP/SIP)
+
+**Calendaring:**
+- _caldav._tcp, _carddav._tcp (Calendar/contact sync)
+
+**Email:**
+- _imap._tcp, _imaps._tcp, _pop3._tcp (Email retrieval)
+- _smtp._tcp (Email submission)
+- _submission._tcp (Modern email submission)
+
+**And many more: databases, Kubernetes, monitoring, VCS, etc.**
+
+LIMITATIONS & CONSIDERATIONS:
+- Many organizations don't use SRV records (older systems)
+- Some intentionally hide services (security through obscurity)
+- Misconfigured SRV records that point to non-existent targets
+- Some services have multiple SRV records (redundancy)
+
+EDUCATIONAL LESSON:
+SRV discovery shows why defenders need layered security - administrators use
+multiple DNS record types for different purposes. Enumeration needs to check
+all of them to get complete visibility. This is one reason why domain security
+is complex: you can't just check A records and assume you know all the services.
+
+USAGE:
+Call srv_pivot() with your base domain to get all SRV-discoverable targets.
+Results are deduplicated and normalized before writing to the scan queue.
 """
 
 import asyncio
