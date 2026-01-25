@@ -612,8 +612,7 @@ ENABLE_EXCEL=true              # Generate Excel reports
 ## Team & Contact
 
 - **Maintainers**: Domain Security Audit project team
-- **Contact**: Add your contact email here (e.g., security@yourdomain.com)
- - **Contact**: asakahatapitiya@gmail.com
+- **Contact**: asakahatapitiya@gmail.com
 - **Purpose**: Support researchers and domain owners using this tool
 
 ## License & Citation
