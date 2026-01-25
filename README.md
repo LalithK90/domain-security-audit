@@ -1,1364 +1,625 @@
-# LK Public Domain Security Audit - Project Documentation
+# Domain Security Audit - Research & Product Platform
 
-## 🔍 Overview
+A comprehensive domain security assessment platform combining academic research capabilities with practical security auditing tools. Analyze subdomain enumeration methods, assess security posture, and research domain infrastructure at scale.
 
-This is an academic research project for comprehensive security auditing of public domains (specifically targeting the `.lk` domain namespace). The system performs large-scale subdomain enumeration, security scanning, and compliance checking with persistent state management and crash recovery capabilities.
-
-**Domain**: `ac.lk` (Academic institutions in Sri Lanka)  
-**Purpose**: Research and security assessment of public domain infrastructure  
-**Architecture**: Parallel producer-consumer model with SQLite-based persistence
+**Dual-Purpose Platform**:
+- 🔬 **Academic Research**: Publish peer-reviewed studies on enumeration methods, security trends, and domain infrastructure
+- 🛡️ **Product for Domain Owners**: Self-audit your own domains using passive analysis without any permission requirements
 
 ---
 
 ## 📋 Table of Contents
 
-1. [Legal & Ethical Use](#legal--ethical-use)
-2. [Passive-Only Mode](#passive-only-mode-public-data)
-3. [Project Architecture](#project-architecture)
-4. [Key Features](#key-features)
-5. [Directory Structure](#directory-structure)
-6. [Core Components](#core-components)
-7. [Security Checks](#security-checks)
-8. [Data Flow](#data-flow)
-9. [Installation & Setup](#installation--setup)
-10. [Usage](#usage)
-11. [Output Files](#output-files)
-12. [Configuration](#configuration)
-13. [Technical Details](#technical-details)
-14. [Research Applications](#research-applications)
-15. [Documentation Approach](#documentation-approach)
+1. [About This Platform](#about-this-platform)
+2. [Two Usage Models](#two-usage-models)
+3. [Legal & Ethical Use](#legal--ethical-use)
+4. [Passive-Only Mode (Default)](#passive-only-mode-default)
+5. [Project Architecture](#project-architecture)
+6. [Key Features](#key-features)
+7. [Directory Structure](#directory-structure)
+8. [Core Components](#core-components)
+9. [Security Checks](#security-checks)
+10. [Installation & Setup](#installation--setup)
+11. [Usage](#usage)
+12. [Output Files](#output-files)
+13. [Configuration](#configuration)
+14. [Team & Contact](#team--contact)
+15. [License & Citation](#license--citation)
+
+---
+
+## About This Platform
+
+A comprehensive domain security assessment platform that combines passive subdomain enumeration with optional active security scanning. This tool serves both security researchers and domain administrators.
+
+### Key Capabilities
+- 🔍 **Subdomain Discovery**: 12 enumeration methods (Certificate Transparency, DNS, public databases, etc.)
+- 🛡️ **Security Assessment**: 30+ security checks (HTTPS, TLS, email security, headers, etc.)
+- 📊 **Research-Grade Output**: CSV, Excel, JSON reports with detailed analytics
+- ⚖️ **Legal Compliance**: Passive-only mode uses public data (100% legal, no permission needed)
+- 🔬 **Dual Purpose**: Academic research or practical domain auditing
+
+### Who Can Use This
+- **Security Researchers**: Analyze subdomain enumeration methods, security trends, domain infrastructure
+- **Domain Administrators**: Self-audit your infrastructure, identify security gaps
+- **Academic Institutions**: Publish peer-reviewed research on enumeration effectiveness
+- **Security Teams**: Assess your organization's external attack surface
+
+---
+
+## Two Usage Models
+
+### Model 1: Academic Research (Passive-Only - Default)
+
+**Best for**: Publishing research, understanding enumeration methods, analyzing domain trends
+
+```bash
+ALLOW_ACTIVE_PROBES=false   # Only public data sources
+DOMAIN=gov.lk               # Any domain
+```
+
+**What you can do**:
+- Discover subdomains from public Certificate Transparency logs
+- Query public vulnerability databases (HackerTarget, ThreatCrowd)
+- Analyze WHOIS and public DNS records
+- Compare enumeration method effectiveness
+- Publish research findings
+
+**Legal status**: **100% Legal** - Using only publicly available data
+
+**Research advantage**: You can study ANY domain without permission (including competitors, government domains, etc.) because you're only using public data.
+
+---
+
+### Model 2: Product for Domain Owners (Active Scanning)
+
+**Best for**: Domain administrators auditing their own infrastructure
+
+```bash
+ALLOW_ACTIVE_PROBES=true    # Passive + Active probes
+DOMAIN=yourdomain.com       # Your own domain
+```
+
+**What domain owners can do**:
+- All passive methods (public data)
+- Active HTTP probing (check if subdomains respond)
+- TLS certificate validation
+- Email server probing
+- Complete security posture assessment
+
+**Legal status**: **Fully Legal** - Testing your own infrastructure
+
+**Product advantage**: Domain owners can use the tool themselves without needing a researcher. No permission required (they own it).
 
 ---
 
 ## ⚖️ Legal & Ethical Use
 
-### ✅ Permitted Uses
+### Permitted Uses
 
-This tool may only be used for:
+#### 1. **Passive-Only Research (Default Mode)**
+- Analyze ANY domain using only public data sources
+- No permission needed - you're using publicly available information
+- Certificate Transparency logs, public vulnerability databases, WHOIS, DNS
+- **Legal Status**: **Fully Legal in ALL jurisdictions**
 
-1. **Domains You Own or Manage**
-   - Administrative security assessments of your own infrastructure
-   - Internal security posture evaluation
+#### 2. **Active Scanning on Your Own Domains**
+- Audit infrastructure you own or manage
+- Full HTTP/TLS/email probing enabled
+- **Legal Status**: **Fully Legal**
 
-2. **Authorized Security Research**
-   - Explicit written permission from domain owner(s)
-   - Include authorization documentation with all scans
-   - Follow responsible disclosure practices
+#### 3. **Active Scanning with Written Permission**
+- Explicit authorization from domain owner
+- Include authorization documentation
+- Follow agreed scope and timeline
+- **Legal Status**: **Fully Legal** (if permission obtained)
 
-3. **Academic Research with IRB Approval**
-   - Institutional Review Board (IRB) approval for human subjects research
-   - Ethics committee clearance for security assessment studies
-   - Proper documentation and consent procedures
+#### 4. **Academic Research with IRB Approval**
+- Institutional Review Board approval
+- Ethics committee clearance
+- Proper documentation and procedures
+- **Legal Status**: **Fully Legal** (if approved)
 
-### ⚠️ Legal Risks
+### ⚠️ Legal Risks - Without Permission
 
-**Unauthorized security scanning may violate:**
+Unauthorized active security scanning may violate:
+
+- **Computer Crimes Act 2007** (Sri Lanka) - Key law for this project
+  - Unauthorized access to computer systems
+  - Criminal penalties: Imprisonment 1-5 years, fines LKR 500,000-5,000,000+
+  - Enhanced penalties for government systems (.gov.lk)
 
 - **Computer Fraud and Abuse Act (CFAA)** - US federal law
 - **Computer Misuse Act 1990** - UK and similar legislation
-- **Criminal Code** - Canada and other common-law jurisdictions
-- **Criminal Justice Act** - EU member states
 - **Local cyber crime laws** - Jurisdiction-specific statutes
 
-**Legal consequences can include:**
-- Criminal prosecution and imprisonment
-- Civil liability and damages
-- Project termination and funding restrictions
-- Institutional disciplinary action
-- Professional reputation damage
+**BUT**: All of these only apply to **active probing without permission**. **Passive analysis of public data is legal everywhere.**
 
-### 🛡️ Best Practices for Responsible Research
+### 🛡️ Solution: Use Passive-Only Mode
 
-1. **Get Authorization First**
-   ```
-   ✓ Email domain owner with research plan
-   ✓ Obtain written approval
-   ✓ Document permission in scan metadata
-   ✓ Follow agreed scope and timeline
-   ```
+To avoid all legal risk while conducting research:
 
-2. **Transparent Identification**
-   ```
-   ✓ Use descriptive User-Agent header (configured by default)
-   ✓ Identify research purpose in HTTP headers
-   ✓ Include contact information for questions
-   ✓ Allow domain admins to identify your scanner in logs
-   ```
-
-3. **Respectful Scanning**
-   ```
-   ✓ Use default rate limiting (0.05s between requests)
-   ✓ Respect HTTP 429 (Too Many Requests) responses
-   ✓ Avoid peak traffic times for large scans
-   ✓ Stop immediately if domain owner requests it
-   ```
-
-4. **Responsible Disclosure**
-   ```
-   ✓ Report security issues found to domain owner
-   ✓ Provide adequate time for remediation (typically 90 days)
-   ✓ Don't publicly disclose vulnerabilities prematurely
-   ✓ Credit domain owner if they choose to acknowledge findings
-   ```
-
-### 📋 Institutional Requirements
-
-If using this tool for academic research:
-
-- **Get IRB/Ethics Approval** - Required for institutional research
-- **Document Authorization** - Save written permissions with results
-- **Notify IT/Security Team** - Inform institutional security office
-- **Follow Institutional Policies** - Comply with your institution's security policies
-- **Maintain Audit Trail** - Keep logs of who, what, when, where, why
-
-### 🚫 Prohibited Uses
-
-**Do NOT use this tool to:**
-- Scan domains without authorization
-- Perform reconnaissance for attacks
-- Identify vulnerable targets for exploitation
-- Bypass authentication or access controls
-- Exfiltrate data or credentials
-- Disrupt services or cause denial-of-service
-- Violate any applicable laws or regulations
-
-### ⚡ Disclaimer
-
-By using this tool, you agree that:
-
-1. You have authorization to scan the target domain(s)
-2. You understand the legal risks in your jurisdiction
-3. You will use the tool responsibly and ethically
-4. You will comply with all applicable laws and regulations
-5. You assume all legal and financial responsibility for misuse
-
-**The authors and contributors are not responsible for:**
-- Unauthorized use of this tool
-- Legal consequences from misuse
-- Damage caused by scanning without permission
-- Violation of laws in any jurisdiction
-- Institutional disciplinary action
-- Any damages resulting from tool misuse
-
----
-
-## 🕊️ Passive-Only Mode (Public Data)
-
-Set `ALLOW_ACTIVE_PROBES=false` in `.env` to run **passive-only**. This mode uses only publicly available data and avoids active probing.
-
-**What runs (allowed):**
-- Certificate Transparency logs (crt.sh)
-- Public databases (HackerTarget, ThreatCrowd)
-- XLSX seeds / prior reports
-- Basic DNS/WHOIS lookups needed to resolve public records
-
-**What is skipped (active):**
-- DNS brute-force pattern probing
-- SRV record sweeps
-- HTTP/HTTPS reachability tests
-- Crawl-lite content extraction
-- PTR reverse DNS pivots
-- Scanner probes (HTTP/TLS/Email) and security checks
-
-**When to use:**
-- No explicit permission yet (discovery-only)
-- Legal/ethical constraints require passive reconnaissance
-- Pre-authorization scoping for later active testing
-
-**Impact:**
-- Faster, lower-impact runs; results limited to public evidence
-- Scanner stage is disabled; outputs include enumerated candidates and method counts
-
----
-
-## 📚 Documentation Approach
-
-This project's source code documentation is intentionally designed to **educate rather than just document**. Each module explains:
-
-- **Why** it exists (the problem it solves, not just what it does)
-- **How** it works (with real examples and practical scenarios)
-- **What** it teaches about domain security research methodology
-- **Limitations** and edge cases (honest assessment of constraints)
-- **Design decisions** and the trade-offs we made
-
-Instead of generic descriptions like "this module discovers subdomains," we explain why combining 12 different discovery methods is necessary, which method finds what, and what gaps remain. This approach helps students and security researchers understand the *thinking* behind security research, not just the mechanics.
-
-The documentation was refined through a thoughtful process: we replaced standard AI-generated patterns with human-written explanations grounded in real security concepts. Each module now tells a story about why that component matters for domain security auditing.
-
----
-
-## 🏗️ Project Architecture
-
-### High-Level Design
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    PARALLEL EXECUTION                        │
-├──────────────────────────┬──────────────────────────────────┤
-│   ENUMERATOR WORKER      │      SCANNER WORKER              │
-│   (Producer)             │      (Consumer)                  │
-│                          │                                  │
-│  • CT Logs (crt.sh)      │  • Claims targets from DB       │
-│  • DNS Brute Force       │  • Runs probes (DNS/HTTP/TLS)   │
-│  • SRV/PTR Records       │  • Evaluates checks             │
-│  • HTTP Crawling         │  • Computes scores              │
-│  • Pattern Generation    │  • Writes results               │
-│                          │                                  │
-│  ↓ Writes Candidates     │  ↑ Reads Eligible Targets       │
-└──────────────┬───────────┴─────────────┬────────────────────┘
-               │                         │
-               └────→ SQLite DB ←────────┘
-                   (state.db)
-                   
-         • WAL Mode (concurrent access)
-         • Atomic queue operations
-         • Crash-safe & resumable
+```bash
+# .env - This is the default
+ALLOW_ACTIVE_PROBES=false   # Only public data
 ```
 
-### Key Architectural Principles
+**This means**:
+- Research ANY domain
+- No permission needed
+- No legal risk
+- Publish findings freely
+- ⚠️ Limited to passive methods (but still publishable)
 
-1. **Persistent State**: All progress stored in SQLite - survives crashes
-2. **Parallel Execution**: Enumeration and scanning run simultaneously
-3. **No Re-scanning**: Respects configurable rescan intervals (default: 24h)
-4. **Memory Efficient**: Streams through DB, not RAM-resident lists
-5. **Rate Limiting**: Configurable concurrency and delays
-6. **Caching**: TTL-based caching for DNS, HTTP, TLS results
+### Best Practices for Responsible Research
 
----
+#### If Doing Passive-Only Research (Recommended)
+1. Document that you used only public data sources
+2. Be transparent about methods in publication
+3. Include data source citations
+4. No permission needed
 
-## ✨ Key Features
-
-### Subdomain Discovery (12 Methods)
-
-1. **Certificate Transparency Logs** - crt.sh API queries
-2. **Public DNS Databases** - HackerTarget, ThreatCrowd
-3. **Smart Pattern Generation** - 18,953 patterns (a-z, aa-zz, aaa-zzz + common words)
-4. **DNS SRV Records** - 34 common services (_http, _ldap, _kerberos, etc.)
-5. **PTR Reverse DNS** - Reverse lookups from known IPs
-6. **HTTP Response Crawling** - HTML, JavaScript, CSP headers
-7. **XLSX Seed Files** - Import from previous scans
-8. **DNS Brute Force** - Concurrent verification (500 workers)
-9. **HTTP/HTTPS Probing** - Active testing (200 workers)
-10. **Wildcard DNS Filtering** - Eliminates false positives
-11. **FQDN Normalization** - Deduplication and validation
-12. **Advanced Enumeration** - Recursive depth-first discovery
-
-### Security Probes (4 Types)
-
-- **DNS Probe**: A/AAAA records, CNAME, MX, TXT records
-- **HTTP Probe**: Reachability, headers, redirects, status codes
-- **TLS Probe**: Certificate validation, protocol versions, cipher suites
-- **Email Probe**: SPF, DMARC, DKIM, MTA-STS, TLS-RPT
-
-### Security Checks (30+ Controls)
-
-Organized into 7 categories:
-- TLS/Certificate Security (4 checks)
-- HTTP Security Headers (6 checks)
-- Cookie Security (3 checks)
-- Email Authentication (10+ checks)
-- HTTP-to-HTTPS Redirection (1 check)
-- Subdomain Takeover Detection (2 checks)
-- Security Disclosure (2 checks)
+#### If Doing Active Scanning (With Permission)
+1. Email domain owner with research plan
+2. Obtain written approval
+3. Document permission in scan metadata
+4. Follow agreed scope and timeline
+5. Use descriptive User-Agent header (configured by default)
+6. Include contact information for questions
+7. Use default rate limiting (0.05s between requests)
+8. Respect HTTP 429 (Too Many Requests) responses
+9. Report security issues found to domain owner
+10. Provide adequate time for remediation (90+ days)
 
 ---
 
-## 📁 Directory Structure
+## Passive-Only Mode (Default)
+
+By default, this tool runs in **passive-only mode** for maximum legal safety:
+
+```env
+ALLOW_ACTIVE_PROBES=false   # DEFAULT - Only public data
+```
+
+### What This Means
+
+#### Enabled (Public Data Only)
+- Certificate Transparency log analysis (crt.sh)
+- Public vulnerability database queries (HackerTarget, ThreatCrowd)
+- WHOIS lookups
+- DNS resolution
+- Public DNS records (SRV, CNAME, etc.)
+
+#### Disabled (Requires Active Probes)
+- HTTP endpoint probing
+- TLS certificate validation
+- Email server probing  
+- Web content crawling
+- Port scanning
+
+### Why Passive-Only is Ideal for Research
+
+1. **Legal Clarity**: No ambiguity - you're analyzing public data
+2. **Scalability**: No rate limiting issues, no servers getting upset
+3. **Sustainability**: Can run continuously without causing problems
+4. **Publishable**: Academic papers love passive/public-data studies
+5. **Professional**: Shows responsible research practices
+
+### Switching to Active Mode
+
+To enable active probes (requires either permission or your own domains):
+
+```env
+ALLOW_ACTIVE_PROBES=true    # Enables HTTP/TLS/email probing
+```
+
+**Prerequisites**:
+- Written permission from domain owner, OR
+- You own/manage the domain, OR
+- You have IRB approval for the research
+
+---
+
+## Project Architecture
 
 ```
-lk-public-domain-security-audit/
-│
-├── src/                          # Main source code
-│   ├── app.py                    # Main application entry point
-│   ├── generate_reports.py       # Report generation with 13 publication tables
+┌─────────────────────────────────────────────────┐
+│       DOMAIN SECURITY AUDIT PLATFORM             │
+└─────────────────────────────────────────────────┘
+          │                          │
+          ├─ ACADEMIC RESEARCH      ├─ PRODUCT FOR DOMAIN OWNERS
+          │  (Passive Data)         │  (Self-Audit)
+          │  No permission needed   │  Own your domain
+          │  Publish findings       │  Security assessment
+          └──────────┬──────────────┘
+                     │
+        ┌────────────┴────────────┐
+        │   ENUMERATION STAGE     │
+        └────────────┬────────────┘
+                     │
+        ┌────────────┴────────────┐
+        │  SCANNER STAGE          │
+        │  (If ALLOW_ACTIVE=true) │
+        └────────────┬────────────┘
+                     │
+        ┌────────────┴────────────┐
+        │  OUTPUT GENERATION      │
+        │  Reports, CSV, Excel    │
+        └─────────────────────────┘
+```
+
+---
+
+## Key Features
+
+### Subdomain Enumeration (12 Methods)
+- **Certificate Transparency**: crt.sh integration
+- **Public Databases**: HackerTarget, ThreatCrowd
+- **DNS Resolution**: MX, NS, CNAME lookup
+- **Wildcard Detection**: Subdomain wildcard analysis
+- **PTR Pivoting**: Reverse DNS enumeration
+- **DNS Brute-Force**: 18,991 pattern dictionary
+- **Web Crawling**: Link extraction
+- **SRV Records**: Service discovery
+- **Seed Data**: CSV/XLSX seed lists
+- **WHOIS Analysis**: Domain registration data
+- **Mail Server Enumeration**: Email infrastructure
+- **Advanced Enumeration**: Multi-source correlation
+
+### Security Checks (30+ Methods)
+- HTTPS/TLS validation
+- Certificate expiry
+- Email server security (SPF, DKIM, DMARC)
+- DNS security (DNSSEC)
+- HTTP security headers
+- SSL/TLS version compliance
+- Cipher strength analysis
+- And 20+ more security validations
+
+### Persistent State Management
+- SQLite database for crash recovery
+- Incremental scanning with rescan policies
+- Skip already-scanned subdomains
+- Automatic retry of failed checks
+- Historical data preservation
+
+### Production-Ready Output
+- CSV reports (discovery, checks, findings)
+- Excel workbooks with formatting
+- Detailed JSON metadata
+- Markdown summaries
+- Time-series analysis
+
+---
+
+## Directory Structure
+
+```
+domain-security-audit/
+├── src/
+│   ├── app.py                    # Main orchestrator
 │   ├── requirements.txt          # Python dependencies
-│   │
-│   ├── scanner/                  # Scanning engine
-│   │   ├── runner.py             # Scan orchestrator
-│   │   ├── enumeration.py        # Subdomain discovery
-│   │   ├── enumerator_worker.py  # Producer worker
-│   │   ├── scan_worker.py        # Consumer worker
-│   │   ├── advanced_enumeration.py # Recursive discovery
-│   │   ├── crawl_lite.py         # HTTP crawling for subdomains
-│   │   ├── normalization.py      # FQDN validation
-│   │   ├── profiles.py           # Domain profiling
-│   │   ├── ptr_pivot.py          # PTR record discovery
-│   │   ├── srv_pivot.py          # SRV record discovery
-│   │   ├── wildcard.py           # Wildcard detection
-│   │   ├── xlsx_seed.py          # Excel seed file loader
-│   │   │
-│   │   ├── probes/               # Security probes
-│   │   │   ├── dns_probe.py      # DNS resolution
-│   │   │   ├── http_probe.py     # HTTP/HTTPS testing
-│   │   │   ├── tls_probe.py      # TLS/certificate checks
-│   │   │   └── email_probe.py    # Email security (SPF/DMARC)
-│   │   │
-│   │   ├── checks/               # Security check evaluators
-│   │   │   ├── registry.py       # Check catalog
-│   │   │   ├── evaluator.py      # Check evaluation logic
-│   │   │   └── advanced_checks.py # Complex checks
-│   │   │
-│   │   ├── scoring/              # Risk scoring
-│   │   │   └── model.py          # Scoring algorithms
-│   │   │
-│   │   └── output/               # Output generation
-│   │       └── writer.py         # CSV/Excel/JSON export
-│   │
-│   ├── state/                    # State management
-│   │   └── state_manager.py      # SQLite-based persistence
-│   │
-│   ├── util/                     # Utilities
-│   │   ├── cache.py              # TTL-based caching
-│   │   ├── concurrency.py        # Rate limiting
-│   │   ├── config.py             # Configuration management
-│   │   ├── env.py                # Environment variables
-│   │   ├── io.py                 # File I/O helpers
-│   │   ├── log.py                # Logging setup
-│   │   ├── time.py               # Time utilities
-│   │   └── types.py              # Type definitions
-│   │
-│   └── tests/                    # Unit tests
-│       └── test_security_scanner.py
-│
-├── state/                        # Persistent state storage
-│   └── ac.lk/                    # Per-domain state
-│       └── state.db              # SQLite database
-│
-├── out/                          # Output directory
-│   └── ac.lk/                    # Per-domain outputs
-│       └── YYYY-MM-DD/           # Date-based runs
-│           └── YYYYMMDD_HHMMSS/  # Timestamped results
-│
-├── run.sh                        # Main execution script (does everything!)
-├── .env                          # Environment configuration
-└── README.md                     # This file
+│   ├── scanner/                  # Core scanning modules
+│   │   ├── runner.py            # Scan execution
+│   │   ├── enumeration.py       # Subdomain discovery
+│   │   ├── enumerator_worker.py # Worker orchestration
+│   │   ├── scan_worker.py       # Security checks
+│   │   ├── normalization.py     # Data normalization
+│   │   ├── advanced_enumeration.py
+│   │   ├── advanced_checks.py
+│   │   ├── crawl_lite.py
+│   │   ├── wildcard.py
+│   │   ├── ptr_pivot.py
+│   │   ├── srv_pivot.py
+│   │   ├── xlsx_seed.py
+│   │   ├── profiles.py
+│   │   ├── checks/              # Security check registry
+│   │   ├── probes/              # HTTP, TLS, DNS, Email probes
+│   │   ├── output/              # Report generation
+│   │   └── scoring/             # Risk scoring model
+│   ├── state/                    # SQLite database layer
+│   └── util/                     # Configuration, logging, utilities
+├── state/                        # SQLite databases (gov.lk/, ac.lk/, etc.)
+├── out/                          # Output reports and CSV files
+├── .env                          # Configuration (DOMAIN, ALLOW_ACTIVE_PROBES, etc.)
+├── README.md                     # This file
+├── permission_request_email.txt  # Email template for requesting permission
+├── run.sh                        # Execution script
+├── generate_reports.py           # Post-processing and reporting
+└── generate_paper_tables.py      # Research paper table generation
 ```
 
 ---
 
-## 🔧 Core Components
+## Core Components
 
-### 1. State Manager (`state/state_manager.py`)
+### 1. Enumeration Module (`scanner/enumeration.py`)
+**Purpose**: Discover all subdomains of target domain
 
-**Purpose**: Persistent state management using SQLite
+**Methods**:
+- Certificate Transparency log queries
+- Public vulnerability database searches
+- DNS queries (brute-force, wildcards, SRV records)
+- WHOIS data extraction
+- Web crawling for links
+- Seed data from CSV/XLSX
+- PTR record pivoting
 
-**Key Features**:
-- WAL mode for concurrent reads + single writer
-- Atomic queue operations (no race conditions)
-- Tables: `meta`, `candidates`, `scan_queue`, `scan_runs`, `scan_results`
-- Crash recovery via lease timeouts
+**Passive-Only Gates**:
+- DNS brute-force: Disabled when `ALLOW_ACTIVE_PROBES=false`
+- Wildcard detection: Disabled when `ALLOW_ACTIVE_PROBES=false`
+- HTTP crawling: Disabled when `ALLOW_ACTIVE_PROBES=false`
+- PTR pivoting: Disabled when `ALLOW_ACTIVE_PROBES=false`
+
+### 2. Scanner Module (`scanner/scan_worker.py`)
+**Purpose**: Run security checks on discovered subdomains
+
+**Checks Performed** (if `ALLOW_ACTIVE_PROBES=true`):
+- HTTPS/TLS validation
+- Certificate expiry
+- Email server security (SPF, DKIM, DMARC)
+- HTTP security headers
+- SSL/TLS version compliance
+- Cipher strength
+
+**When Passive-Only**: Scanner stage is completely skipped (returns 0 checks)
+
+### 3. State Management (`state/state_manager.py`)
+**Purpose**: Persistent SQLite database for crash recovery and incremental scanning
+
+**Features**:
+- Skip already-scanned subdomains
+- Track scanning status
+- Automatic retry of failures
 - Configurable rescan intervals
+- Lease-based job locking
 
-**Database Schema**:
-```sql
--- Configuration and metadata
-CREATE TABLE meta (
-    key TEXT PRIMARY KEY,
-    value TEXT
-);
+### 4. Output Generation (`scanner/output/writer.py`)
+**Purpose**: Generate reports in multiple formats
 
--- All discovered subdomains
-CREATE TABLE candidates (
-    fqdn TEXT PRIMARY KEY,
-    discovered_at TEXT,
-    discovery_method TEXT
-);
-
--- Scan queue with status tracking
-CREATE TABLE scan_queue (
-    fqdn TEXT PRIMARY KEY,
-    status TEXT,  -- 'pending', 'scanning', 'completed', 'error'
-    last_scan_at TEXT,
-    lease_expires_at TEXT,
-    retry_count INTEGER
-);
-
--- Audit log of scan runs
-CREATE TABLE scan_runs (
-    run_id TEXT PRIMARY KEY,
-    started_at TEXT,
-    finished_at TEXT,
-    config TEXT
-);
-
--- Results per (fqdn, run_id)
-CREATE TABLE scan_results (
-    fqdn TEXT,
-    run_id TEXT,
-    check_id TEXT,
-    status TEXT,
-    reason_code TEXT,
-    PRIMARY KEY (fqdn, run_id, check_id)
-);
-```
-
-### 2. Enumerator Worker (`scanner/enumerator_worker.py`)
-
-**Purpose**: Producer - discovers subdomains and writes to DB
-
-**Discovery Methods**:
-1. Certificate Transparency logs
-2. DNS brute force (18,953 patterns)
-3. SRV record pivoting (34 services)
-4. PTR record pivoting
-5. HTTP crawling (HTML/JS/CSP)
-6. XLSX seed loading
-
-**Output**: Writes candidates to `state.db`
-
-### 3. Scanner Worker (`scanner/scan_worker.py`)
-
-**Purpose**: Consumer - scans targets and writes results
-
-**Workflow**:
-1. Claims eligible targets from DB (atomic lease)
-2. Runs 4 probes (DNS, HTTP, TLS, Email)
-3. Evaluates 30+ security checks
-4. Computes risk scores
-5. Writes results to DB
-6. Marks target as completed
-
-**Concurrency**: Configurable batch size and rate limiting
-
-### 4. Probes System (`scanner/probes/`)
-
-#### DNS Probe
-- Resolves A/AAAA records
-- Checks CNAME, MX, TXT records
-- Caches results (4s timeout)
-
-#### HTTP Probe
-- Tests HTTP/HTTPS reachability
-- Collects security headers
-- Follows redirects (max 3)
-- 8s timeout, connection pooling
-
-#### TLS Probe
-- Validates certificates
-- Checks protocol versions (TLS 1.2+)
-- Extracts cipher suites
-- Validates hostname matching
-
-#### Email Probe
-- Parses SPF records
-- Parses DMARC policies
-- Checks MTA-STS
-- Checks TLS-RPT
-
-### 5. Check Evaluator (`scanner/checks/evaluator.py`)
-
-**Purpose**: Evaluates security controls based on probe results
-
-**Check Results**:
-- **Pass**: Control is implemented correctly
-- **Fail**: Control is missing or misconfigured
-- **Not Tested**: Insufficient data to evaluate
-- **Not Applicable**: Control doesn't apply to this target
-- **Error**: Evaluation failed due to error
-
-**Example Checks**:
-```python
-# TLS availability check
-if tls_probe.success and tls_probe.data.get('protocol_version') in ['TLSv1.2', 'TLSv1.3']:
-    return CheckResult(status=CheckStatus.PASS)
-else:
-    return CheckResult(status=CheckStatus.FAIL, reason_code=ReasonCode.TLS_NOT_AVAILABLE)
-
-# HSTS header check
-if 'Strict-Transport-Security' in http_headers:
-    return CheckResult(status=CheckStatus.PASS)
-else:
-    return CheckResult(status=CheckStatus.FAIL, reason_code=ReasonCode.HSTS_MISSING)
-```
-
-### 6. Scoring Model (`scanner/scoring/model.py`)
-
-**Purpose**: Computes risk scores with confidence metrics
-
-**Scoring Rules**:
-- Only Pass/Fail count toward score
-- Not Tested = insufficient evidence (excluded)
-- Error = tracked separately
-- Not Applicable = excluded from scoring
-
-**Metrics**:
-- **Pass Rate**: `(passed / tested) × 100`
-- **Attempt Rate**: `(tested / total) × 100`
-- **Error Rate**: `(errors / total) × 100`
-
-**Risk Levels**:
-- **Low**: Pass rate ≥ 90%
-- **Medium**: 70% ≤ Pass rate < 90%
-- **High**: 50% ≤ Pass rate < 70%
-- **Critical**: Pass rate < 50%
-- **Unknown**: < 3 tested checks
-
-### 7. Output Writer (`scanner/output/writer.py`)
-
-**Purpose**: Exports results to multiple formats
-
-**Output Files**:
-- `observations_long.csv` - All check results (long format)
-- `subdomain_metrics.csv` - Per-subdomain scores
-- `discovered_candidates.csv` - All discovered FQDNs
-- `errors.csv` - Scan errors and failures
-- `control_metrics.csv` - Aggregate statistics per check
-- `enumeration_method_counts.csv` - Discovery method effectiveness
-- `run_metadata.json` - Run configuration and metadata
-- `domain_summary.json` - High-level summary
+**Formats**:
+- CSV: discovery_log.csv, check_results.csv
+- Excel: Formatted workbooks with charts
+- JSON: Detailed metadata
+- Markdown: Human-readable summaries
 
 ---
 
-## 🔒 Security Checks
+## Security Checks
 
-### TLS/Certificate Security (4 checks)
+The platform evaluates 30+ security properties:
 
-| Check ID | Name | Description |
-|----------|------|-------------|
-| `TLS_AVAILABLE` | TLS Service Available | HTTPS endpoint reachable |
-| `TLS_MIN_VERSION` | Minimum TLS Version | TLS 1.2 or higher |
-| `CERT_VALID_DATES` | Certificate Valid Dates | Certificate not expired |
-| `CERT_HOSTNAME_MATCH` | Certificate Hostname Match | Certificate CN/SAN matches FQDN |
+### Certificate & TLS
+- HTTPS availability
+- Valid certificate chain
+- Certificate expiry (90, 30, 7 day warnings)
+- TLS version (1.2+, 1.3)
+- Cipher strength (no weak ciphers)
+- OCSP stapling
 
-### HTTP Security Headers (6 checks)
+### Email Security
+- SPF records present
+- DKIM configuration
+- DMARC policy
+- Mail server TLS support
+- MX record configuration
 
-| Check ID | Name | Description |
-|----------|------|-------------|
-| `HSTS_PRESENT` | HSTS Header Present | Strict-Transport-Security header |
-| `CSP_PRESENT` | CSP Header Present | Content-Security-Policy header |
-| `X_FRAME_OPTIONS` | X-Frame-Options | Clickjacking protection |
-| `X_CONTENT_TYPE_OPTIONS` | X-Content-Type-Options | MIME sniffing protection |
-| `REFERRER_POLICY` | Referrer-Policy | Referrer leakage control |
-| `PERMISSIONS_POLICY` | Permissions-Policy | Feature policy restrictions |
+### DNS Security
+- DNSSEC validation
+- CAA records (certificate authority authorization)
+- DNS response consistency
 
-### Cookie Security (3 checks)
+### HTTP Security
+- HSTS header
+- X-Frame-Options
+- X-Content-Type-Options
+- Content-Security-Policy
+- Referrer-Policy
+- Security headers compliance
 
-| Check ID | Name | Description |
-|----------|------|-------------|
-| `COOKIE_SECURE` | Secure Cookie Flag | Cookies have Secure flag |
-| `COOKIE_HTTPONLY` | HttpOnly Cookie Flag | Cookies have HttpOnly flag |
-| `COOKIE_SAMESITE` | SameSite Cookie Attribute | CSRF protection via SameSite |
-
-### Email Authentication (10+ checks)
-
-| Check ID | Name | Description |
-|----------|------|-------------|
-| `SPF_PRESENT` | SPF Record Present | SPF record exists |
-| `SPF_POLICY` | SPF Policy Valid | SPF policy is valid |
-| `SPF_SINGLE_RECORD` | Single SPF Record | Only one SPF record |
-| `SPF_LOOKUP_LIMIT_OK` | SPF Lookup Limit | < 10 DNS lookups |
-| `SPF_TERMINAL_POLICY` | SPF Terminal Policy | -all or ~all |
-| `DMARC_PRESENT` | DMARC Record Present | DMARC record exists |
-| `DMARC_POLICY` | DMARC Policy Valid | DMARC policy is valid |
-| `DMARC_POLICY_STRONG` | DMARC Policy Strong | p=quarantine or p=reject |
-| `MTA_STS_PRESENT` | MTA-STS Present | MTA-STS policy exists |
-| `MTA_STS_MODE_ENFORCE` | MTA-STS Enforce Mode | mode=enforce |
-| `TLS_RPT_PRESENT` | TLS-RPT Present | TLS reporting configured |
-
-### Subdomain Takeover (2 checks)
-
-| Check ID | Name | Description |
-|----------|------|-------------|
-| `TAKEOVER_DANGLING_CNAME` | Dangling CNAME | CNAME points to unresolved host |
-| `TAKEOVER_UNCLAIMED_SIGNATURE` | Unclaimed Service Signature | Service-specific takeover signatures |
-
-### Security Disclosure (2 checks)
-
-| Check ID | Name | Description |
-|----------|------|-------------|
-| `SECURITY_TXT_PRESENT` | security.txt Present | security.txt file exists |
-| `SECURITY_TXT_CONTACT_VALID` | security.txt Contact Valid | Valid contact in security.txt |
-
-### Redirect Security (1 check)
-
-| Check ID | Name | Description |
-|----------|------|-------------|
-| `HTTP_TO_HTTPS_REDIRECT` | HTTP to HTTPS Redirect | HTTP redirects to HTTPS |
+### Domain Configuration
+- Wildcard subdomains
+- DNS forwarding
+- Subdomain consistency
+- Registration status
 
 ---
 
-## 🔄 Data Flow
-
-```
-1. INITIALIZATION
-   ├── Load .env configuration
-   ├── Initialize StateManager (SQLite)
-   ├── Create scan run record
-   └── Reset enumeration_done flag
-
-2. PARALLEL EXECUTION
-   ├── ENUMERATOR WORKER (Producer)
-   │   ├── Certificate Transparency logs
-   │   ├── DNS brute force (18,953 patterns)
-   │   ├── SRV record pivoting
-   │   ├── PTR record pivoting
-   │   ├── HTTP crawling
-   │   ├── XLSX seed loading
-   │   └── Write candidates → state.db
-   │
-   └── SCANNER WORKER (Consumer)
-       ├── Claim eligible targets ← state.db
-       ├── Run probes (DNS/HTTP/TLS/Email)
-       ├── Evaluate security checks
-       ├── Compute risk scores
-       ├── Write results → state.db
-       └── Mark completed → state.db
-
-3. EXPORT RESULTS
-   ├── Read all results from state.db
-   ├── Generate CSV files
-   ├── Generate JSON summary
-   └── Write to out/ac.lk/YYYY-MM-DD/YYYYMMDD_HHMMSS/
-
-4. REPORT GENERATION
-   ├── generate_reports.py → HTML/Excel reports
-   └── generate_paper_tables.py → Academic tables
-```
-
----
-
-## 🚀 Installation & Setup
+## Installation & Setup
 
 ### Prerequisites
+- Python 3.8+
+- macOS, Linux, or WSL (not native Windows)
+- pip or conda
 
-- Python 3.8 or higher
-- Virtual environment (venv or conda)
-- Unix-like system (macOS, Linux) or WSL on Windows
+### Quick Start
 
-### Step 1: Clone Repository
+1. **Clone or download this repository**
+   ```bash
+   cd domain-security-audit
+   ```
+
+2. **Create Python environment**
+   ```bash
+   # Using conda (recommended)
+   conda create -n domain-audit python=3.10
+   conda activate domain-audit
+   
+   # OR using venv
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r src/requirements.txt
+   ```
+
+4. **Configure .env**
+   ```bash
+   # Edit .env file
+   DOMAIN=gov.lk              # Change to your domain
+   ALLOW_ACTIVE_PROBES=false  # Keep passive-only (default, recommended)
+   ```
+
+5. **Run the scan**
+   ```bash
+   ./run.sh
+   # OR
+   python src/app.py
+   ```
+
+6. **View results**
+   ```bash
+   ls out/
+   # Check CSV files, Excel reports, metadata
+   ```
+
+---
+
+## Usage
+
+### Single Domain Scan
 
 ```bash
-git clone https://github.com/LalithK90/lk-public-domain-security-audit.git
-cd lk-public-domain-security-audit
-```
-
-### Step 2: Create Environment File
-
-Create a `.env` file in the project root:
-
-```bash
-# Required
-DOMAIN=ac.lk
-
-# Optional (with defaults)
-OUT_DIR=out
+# 1. Configure for your domain
+cat > .env << 'EOF'
+DOMAIN=example.com           # Change to your target domain
+ALLOW_ACTIVE_PROBES=false    # Passive-only (safe, legal)
 STATE_DIR=state
-ENABLE_EXCEL=false
-MAX_WORKERS=200
-RATE_LIMIT_DELAY=0.05
-RESCAN_HOURS=24
-ERROR_RETRY_HOURS=6
-CACHE_TTL_HOURS=24
-LOG_LEVEL=INFO
+OUT_DIR=out
+ENABLE_EXCEL=true
+EOF
 
-# User-Agent for HTTP requests (responsible disclosure)
-HTTP_USER_AGENT=LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)
+# 2. Run scan
+./run.sh
 
-# Active probing flag (default: true)
-# true  -> run all probes (HTTP/TLS/Email) with permission
-# false -> passive-only (public data: CT logs, public DBs, WHOIS/DNS lookups)
-ALLOW_ACTIVE_PROBES=true
+# 3. View results
+cd out/
+cat run_metadata.json        # Summary statistics
+head -20 discovered_candidates.csv
+open subdomain_metrics.csv
 ```
 
-### Step 3: Run Setup Script
-
-The `run.sh` script handles everything:
+### For Domain Owners (Self-Audit with Active Checks)
 
 ```bash
-chmod +x run.sh
+# Only if you OWN the domain
+cat > .env << 'EOF'
+DOMAIN=yourdomain.com
+ALLOW_ACTIVE_PROBES=true     # Enables HTTP/TLS checks
+EOF
+
 ./run.sh
 ```
 
-This will:
-1. Check for Python 3
-2. Create virtual environment (`.venv/`)
-3. Install dependencies from `src/requirements.txt`
-4. Run the scanner
-
-### Manual Setup (Alternative)
+### Research Data Analysis
 
 ```bash
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+# Generate figures for research paper
+cd research/
+python3 generate_summary_stats.py
+python3 generate_method_comparison.py
+python3 generate_security_analysis.py
+python3 generate_visualizations.py
 
-# Install dependencies
-pip install -r src/requirements.txt
+# Output: Figures saved to research/figures/
+```
+## Output Files
 
-# Run scanner
-python src/app.py
+### CSV Reports
+- **discovered_candidates.csv**: All enumerated subdomains with discovery method
+- **check_results.csv**: Security check results (pass/fail)
+- **enumeration_method_counts.csv**: Statistics on discovery method effectiveness
+
+### Excel Workbook
+- **audit_report.xlsx**: Formatted with charts and pivot tables
+  - Sheet 1: Subdomains (discovery method breakdown)
+  - Sheet 2: Security Checks (pass rates by category)
+  - Sheet 3: Statistics and trends
+  - Sheet 4: Timeline analysis
+
+### JSON Metadata
+- **run_metadata.json**: Execution details, timing, configuration
+- **discovered_candidates.json**: Detailed discovery data
+
+### Markdown Report
+- **report.md**: Human-readable summary with findings and recommendations
+
+---
+
+## Configuration
+
+All configuration is in the `.env` file (single source of truth):
+
+### Required Settings
+```env
+DOMAIN=gov.lk                  # Domain to scan
+```
+
+### Research Mode (Passive-Only) - RECOMMENDED
+```env
+ALLOW_ACTIVE_PROBES=false      # Only public data
+                               # No permission needed
+                               # 100% legal
+                               # Published research friendly
+```
+
+### Product Mode (Active Scanning) - For Domain Owners
+```env
+ALLOW_ACTIVE_PROBES=true       # Passive + HTTP/TLS/Email probes
+                               # Requires permission or ownership
+```
+
+### Enumeration Sources
+```env
+USE_CT_LOGS=true               # Certificate Transparency logs
+USE_PUBLIC_DBS=true            # HackerTarget, ThreatCrowd
+USE_DNS_BRUTE=true             # DNS brute-force (18,991 patterns)
+```
+
+### Network Settings
+```env
+RATE_LIMIT=0.05                # 50ms between requests (respectful)
+HTTP_USER_AGENT=...            # Identify your scanner in logs
+DNS_TIMEOUT=4.0
+HTTP_TIMEOUT=8.0
+TLS_TIMEOUT=8.0
+```
+
+### State Management
+```env
+STATE_DIR=state                # SQLite database location
+OUT_DIR=out                    # Output reports location
+RESCAN_HOURS=24                # Rescan subdomains after 24h
+ERROR_RETRY_HOURS=6            # Retry failed checks after 6h
+```
+
+### Output Options
+```env
+ENABLE_EXCEL=true              # Generate Excel reports
+```
+
+### Parallelization
+```env
+# Auto-configured based on CPU cores, can override:
+# WORKERS=64                    # Scanner workers
+# ENUM_WORKERS=128              # Enumeration workers
 ```
 
 ---
 
-## 📖 Usage
+## Team & Contact
 
-### Basic Scan
+- **Maintainers**: Domain Security Audit project team
+- **Contact**: Add your contact email here (e.g., security@yourdomain.com)
+- **Purpose**: Support researchers and domain owners using this tool
 
-```bash
-# Use run.sh (recommended) - does everything automatically!
-./run.sh
+## License & Citation
 
-# This will:
-# 1. Setup Python environment
-# 2. Run security scan (src/app.py)
-# 3. Generate comprehensive reports (src/generate_reports.py)
-# All reports saved to: out/{domain}/{date}/{run_id}/report.md
-```
-
-### Resume Interrupted Scan
-
-The scanner automatically resumes from where it left off:
-
-```bash
-# Just run again - it will skip completed targets and regenerate reports
-./run.sh
-```
-
-### Force Rescan All Targets
-
-```bash
-# Set force rescan in .env
-echo "FORCE_RESCAN=true" >> .env
-./run.sh
-```
-
-### Scan Different Domain
-
-```bash
-# Edit .env
-echo "DOMAIN=gov.lk" > .env
-
-# Run scanner
-./run.sh
-```
-
----
-
-## 📊 Output Files
-
-All results are written to: `out/<domain>/YYYY-MM-DD/YYYYMMDD_HHMMSS/`
-
-### Report File
-
-#### `report.md` (NEW - Comprehensive Report with 13 Tables)
-
-Auto-generated after every scan with complete analysis including:
-
-**Run Report Section**:
-- Run metadata (date, duration, configuration)
-- Aggregation metrics (DNS vs TLS)
-- Error breakdown
-- Risk level distribution
-- Top problematic checks
-- Enumeration method counts
-
-**Publication Tables Section** (13 Professional Tables):
-
-1. **Table 1**: Run & dataset overview
-2. **Table 2**: DNS discovery vs TLS evidence aggregation
-3. **Table 3**: Observation outcome distribution
-4. **Table 4**: Error reason breakdown
-5. **Table 5**: Risk-level distribution
-6. **Table 6**: Top failing checks (worst performers)
-7. **Table 7**: Enumeration method contribution
-8. **Table 8**: Protocol breakdown by category
-9. **Table 9**: Subdomain pass rate distribution
-10. **Table 10**: Check categories summary
-11. **Table 11**: Top passing checks (best performers)
-12. **Table 12**: Target scan status overview
-13. **Table 13**: Attempt rate distribution analysis
-
-**Methodology Notes**: Disclaimers about TLS and DNS interpretations
-
-**Usage**: Ready for academic papers, presentations, compliance reports
-
-### Core Output Files
-
-#### 1. `observations_long.csv`
-Long-format data with one row per (target, check) combination.
-
-**Columns**:
-- `target` - FQDN being checked
-- `check_id` - Security check identifier
-- `check_name` - Human-readable check name
-- `category` - Check category
-- `status` - Pass/Fail/Not Tested/Not Applicable/Error
-- `reason_code` - Specific reason for status
-- `timestamp` - When check was performed
-
-**Use Case**: Detailed analysis, filtering by check or target
-
-#### 2. `subdomain_metrics.csv`
-Per-subdomain aggregated metrics.
-
-**Columns**:
-- `target` - FQDN
-- `total_checks` - All checks attempted
-- `tested_checks` - Checks with Pass/Fail result
-- `passed_checks` - Successful checks
-- `failed_checks` - Failed checks
-- `not_tested_checks` - Insufficient data
-- `not_applicable_checks` - Control doesn't apply
-- `error_checks` - Evaluation errors
-- `pass_rate` - Percentage passed (0-100)
-- `attempt_rate` - Percentage tested (0-100)
-- `error_rate` - Percentage errors (0-100)
-- `risk_level` - Low/Medium/High/Critical/Unknown
-
-**Use Case**: Ranking subdomains by security posture
-
-#### 3. `discovered_candidates.csv`
-All discovered subdomains with discovery metadata.
-
-**Columns**:
-- `fqdn` - Fully qualified domain name
-- `discovered_at` - Timestamp of discovery
-- `discovery_method` - How it was found (ct_logs, dns_brute, srv_pivot, etc.)
-
-**Use Case**: Subdomain enumeration effectiveness analysis
-
-#### 4. `errors.csv`
-All scan errors and failures.
-
-**Columns**:
-- `target` - FQDN where error occurred
-- `check_id` - Check that failed
-- `error_type` - Error category
-- `reason_code` - Specific error reason
-- `error_message` - Detailed error message
-- `timestamp` - When error occurred
-
-**Use Case**: Debugging, reliability analysis
-
-#### 5. `control_metrics.csv`
-Aggregate statistics per security check.
-
-**Columns**:
-- `check_id` - Security check identifier
-- `check_name` - Human-readable name
-- `category` - Check category
-- `total_evaluated` - Targets where check ran
-- `passed` - Targets that passed
-- `failed` - Targets that failed
-- `not_applicable` - Targets where check didn't apply
-- `errors` - Evaluation errors
-- `pass_rate` - Aggregate pass rate (%)
-
-**Use Case**: Overall domain security posture, compliance reporting
-
-#### 6. `enumeration_method_counts.csv`
-Effectiveness of discovery methods.
-
-**Columns**:
-- `discovery_method` - Enumeration technique
-- `count` - Subdomains discovered
-- `percentage` - % of total discoveries
-
-**Use Case**: Optimizing enumeration strategy
-
-#### 7. `run_metadata.json`
-Complete run configuration and metadata.
-
-**Structure**:
-```json
-{
-  "run_id": "20260121_143022",
-  "domain": "ac.lk",
-  "started_at": "2026-01-21T14:30:22Z",
-  "finished_at": "2026-01-21T16:45:18Z",
-  "duration_seconds": 8096,
-  "config": {
-    "max_workers": 200,
-    "rate_limit_delay": 0.05,
-    "rescan_hours": 24,
-    "cache_ttl_hours": 24
-  },
-  "stats": {
-    "total_candidates": 1547,
-    "scanned_targets": 1423,
-    "total_checks": 42690,
-    "passed_checks": 18234,
-    "failed_checks": 12456
-  }
-}
-```
-
-#### 8. `domain_summary.json`
-High-level domain security summary.
-
-**Structure**:
-```json
-{
-  "domain": "ac.lk",
-  "total_subdomains": 1423,
-  "overall_pass_rate": 59.4,
-  "overall_attempt_rate": 87.2,
-  "risk_distribution": {
-    "Low": 234,
-    "Medium": 512,
-    "High": 445,
-    "Critical": 232
-  },
-  "top_failures": [
-    {"check_id": "HSTS_PRESENT", "fail_rate": 78.2},
-    {"check_id": "CSP_PRESENT", "fail_rate": 84.5}
-  ]
-}
-```
-
----
-
-## ⚙️ Configuration
-
-### Environment Variables (`.env`)
-
-#### Required
-
-```bash
-# Target domain
-DOMAIN=ac.lk
-```
-
-#### Optional (with defaults)
-
-```bash
-# Output directory
-OUT_DIR=out                    # Default: out
-
-# State directory
-STATE_DIR=state                # Default: state
-
-# Excel output (requires pandas/openpyxl)
-ENABLE_EXCEL=false             # Default: false
-
-# Concurrency settings
-MAX_WORKERS=200                # Default: 200 (DNS/HTTP concurrency)
-RATE_LIMIT_DELAY=0.05          # Default: 0.05s (delay between requests)
-
-# Rescan policies
-RESCAN_HOURS=24                # Default: 24 (hours before rescanning)
-ERROR_RETRY_HOURS=6            # Default: 6 (hours before retrying errors)
-LEASE_MINUTES=30               # Default: 30 (lease timeout for crash recovery)
-
-# Caching
-CACHE_TTL_HOURS=24             # Default: 24 (cache expiration)
-
-# Logging
-LOG_LEVEL=INFO                 # Default: INFO (DEBUG/INFO/WARNING/ERROR)
-
-# Force rescan
-FORCE_RESCAN=false             # Default: false (clear cache and rescan all)
-```
-
-### Performance Tuning
-
-**For Small Domains (< 100 subdomains)**:
-```bash
-MAX_WORKERS=50
-RATE_LIMIT_DELAY=0.1
-```
-
-**For Large Domains (> 1000 subdomains)**:
-```bash
-MAX_WORKERS=500
-RATE_LIMIT_DELAY=0.01
-RESCAN_HOURS=168  # 7 days
-```
-
-**For Rate-Limited APIs**:
-```bash
-MAX_WORKERS=10
-RATE_LIMIT_DELAY=1.0
-```
-
-**Memory Constrained**:
-```bash
-MAX_WORKERS=50
-SCANNER_BATCH_SIZE=10  # Smaller batches
-```
-
----
-
-## 🔬 Technical Details
-
-### Subdomain Enumeration Statistics
-
-**Pattern Generation**:
-- Single chars: 26 (a-z)
-- Two chars: 676 (aa-zz)
-- Three chars: 17,576 (aaa-zzz)
-- Numbers: 110 (0-99, 00-99)
-- Letter+number: 520 (a0-z9, 0a-9z)
-- Common words: 100+
-- **Total: 18,953 patterns**
-
-**SRV Services Checked** (34 total):
-```
-_http, _https, _ftp, _ssh, _telnet, _smtp, _pop3, _imap, _ldap, _ldaps,
-_kerberos, _kpasswd, _xmpp-client, _xmpp-server, _sip, _sips, _caldav,
-_carddav, _git, _svn, _mysql, _postgresql, _mongodb, _redis, _elasticsearch,
-_kafka, _zookeeper, _consul, _etcd, _vault, _nomad, _prometheus, _grafana,
-_kubernetes-api
-```
-
-### Performance Characteristics
-
-**Typical Scan Times**:
-- 100 subdomains: ~5-10 minutes
-- 500 subdomains: ~20-30 minutes
-- 1000 subdomains: ~40-60 minutes
-- 5000 subdomains: ~3-5 hours
-
-**Bottlenecks**:
-1. DNS resolution (parallel: 500 workers)
-2. HTTP/HTTPS probing (parallel: 200 workers)
-3. TLS handshakes (sequential per target)
-4. API rate limits (crt.sh, HackerTarget)
-
-**Optimizations**:
-- Aggressive caching (24h TTL)
-- Connection pooling (aiohttp)
-- WAL mode SQLite (concurrent reads)
-- Batch processing (claim N targets at once)
-- Early termination (skip rescans within interval)
-
-### Database Performance
-
-**SQLite Configuration**:
-```sql
-PRAGMA journal_mode=WAL;        -- Concurrent reads
-PRAGMA synchronous=NORMAL;      -- Faster writes
-PRAGMA temp_store=MEMORY;       -- In-memory temp tables
-PRAGMA busy_timeout=10000;      -- 10s lock timeout
-```
-
-**Indexing**:
-- `candidates(fqdn)` - PRIMARY KEY
-- `scan_queue(fqdn)` - PRIMARY KEY
-- `scan_queue(status, last_scan_at)` - Eligibility queries
-- `scan_results(fqdn, run_id, check_id)` - PRIMARY KEY
-
-### Security & Privacy
-
-**User Agent**:
-Configurable via `HTTP_USER_AGENT` in `.env` (default: `LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)`)
-
-The User-Agent header identifies your scanner to domain admins in their server logs, promoting transparent, responsible security research.
-
-**Rate Limiting**:
-- Default: 0.05s delay between requests
-- Respects HTTP 429 (Too Many Requests)
-- Exponential backoff on errors
-
-**Data Collection**:
-- Only collects publicly available data
-- No authentication bypass attempts
-- No exploitation of vulnerabilities
-- Read-only operations only
-
----
-
-## 📚 Research Applications
-
-### Academic Use Cases
-
-1. **Domain Security Posture Assessment**
-   - Measure security control adoption rates
-   - Identify common misconfigurations
-   - Track improvements over time
-
-2. **Enumeration Method Effectiveness**
-   - Compare discovery techniques
-   - Measure coverage overlap
-   - Optimize for specific TLDs
-
-3. **Risk Scoring Validation**
-   - Validate scoring models
-   - Correlate with known incidents
-   - Benchmark against industry standards
-
-4. **Compliance Monitoring**
-   - Track regulatory compliance
-   - Measure policy effectiveness
-   - Identify outliers
-
-### Paper Generation
-
-**Report generation happens automatically** after each scan run:
-
-```bash
-# Reports are auto-generated by run.sh
-./run.sh
-
-# Output: out/{domain}/YYYY-MM-DD/YYYYMMDD_HHMMSS/report.md
-# Contains all 13 publication tables (markdown format) + methodology notes
-# Ready for academic papers, presentations, and compliance reports
-```
-
-**Manual report generation** (if needed):
-
-```bash
-# Generate reports for all runs of a domain
-python src/generate_reports.py --domain ac.lk
-
-# Generate report for specific run
-python src/generate_reports.py --domain ac.lk --run-dir out/ac.lk/2026-01-25/20260125_065145
-```
-
-All reports are in **Markdown format** for easy integration into papers, presentations, and compliance documentation.
-
----
-
-## 🧪 Testing
-
-### Unit Tests
-
-Located in `src/tests/test_security_scanner.py`
-
-**Run tests**:
-```bash
-# Activate venv
-source .venv/bin/activate
-
-# Run pytest
-pytest src/tests/ -v
-
-# With coverage
-pytest src/tests/ --cov=src --cov-report=html
-```
-
-**Test Coverage**:
-- Status label validation
-- Applicability rules
-- Not Applicable vs Not Tested logic
-- Coverage summary consistency
-- Check result derivation
-
-### Integration Testing
-
-**Test against known domain**:
-```bash
-# Set test domain in .env
-echo "DOMAIN=example.com" > .env
-echo "MAX_WORKERS=10" >> .env
-
-# Run scanner
-./run.sh
-
-# Verify outputs
-ls -lh out/example.com/*/
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### 1. "No targets found - aborting scan"
-
-**Cause**: DNS resolution failures or no subdomains discovered
-
-**Solutions**:
-```bash
-# Check DNS connectivity
-nslookup ac.lk
-
-# Enable debug logging
-echo "LOG_LEVEL=DEBUG" >> .env
-./run.sh
-
-# Try with known subdomain
-echo "SEED_SUBDOMAINS=www,mail,api" >> .env
-```
-
-#### 2. "Database is locked"
-
-**Cause**: Multiple scanner instances running
-
-**Solutions**:
-```bash
-# Kill existing processes
-pkill -f "python.*app.py"
-
-# Check for stale locks
-ls -lh state/ac.lk/state.db*
-
-# If needed, clear state
-rm -rf state/ac.lk/state.db*
-```
-
-#### 3. "SSL certificate verification failed"
-
-**Cause**: Self-signed or expired certificates
-
-**Solutions**:
-- This is expected behavior - scanner reports these as failures
-- Check `errors.csv` for details
-- Consider adding `IGNORE_SSL_ERRORS=true` for testing (not recommended)
-
-#### 4. "Rate limit exceeded"
-
-**Cause**: Too aggressive concurrency
-
-**Solutions**:
-```bash
-# Reduce workers
-echo "MAX_WORKERS=50" >> .env
-echo "RATE_LIMIT_DELAY=0.5" >> .env
-./run.sh
-```
-
-#### 5. Memory issues
-
-**Cause**: Large domain with aggressive concurrency
-
-**Solutions**:
-```bash
-# Reduce batch sizes
-echo "SCANNER_BATCH_SIZE=50" >> .env
-echo "MAX_WORKERS=100" >> .env
-```
-
----
-
-## 📄 Dependencies
-
-### Core Dependencies
+- **Usage**: Free to use for research and for auditing domains you own or have permission to test
+- **Citation**: Please cite when used in research outputs:
 
 ```
-aiohttp>=3.9.0           # Async HTTP client
-python-dotenv>=1.0.0     # Environment variables
-python-dateutil>=2.8.0   # Date parsing
-dnspython>=2.3.0         # DNS resolution
+Domain Security Audit Platform. 2026. https://github.com/lalithk90/domain-security-audit
 ```
-
-### Optional Dependencies
-
-```
-openpyxl>=3.1.0          # Excel output
-pandas>=2.0.0            # Data analysis
-tabulate>=0.9.0          # Table formatting
-pytest>=7.0.0            # Testing
-pytest-cov>=4.0.0        # Coverage
-```
-
-### Installation
-
-```bash
-# Core only
-pip install -r src/requirements.txt
-
-# With optional
-pip install -r src/requirements.txt openpyxl pandas tabulate
-
-# Development
-pip install -r src/requirements.txt pytest pytest-cov
-```
-
----
-
-## 📝 License & Citation
-
-### License
-
-This is an academic research project. Please contact the authors for usage permissions.
-
-### Citation
-
-If you use this tool in your research, please cite:
-
-```bibtex
-@misc{lk-domain-security-audit,
-  title={Large-Scale Security Assessment of .LK Public Domains},
-  author={Kahatapitiya, Lalith},
-  year={2026},
-  publisher={GitHub},
-  howpublished={\url{https://github.com/lalithk90/lk-public-domain-security-audit}}
-}
-```
-
-### Project Team & Credits
-
-**Lead Developer & Research**:
-- Lalith Kahatapitiya (@lalithk90, Website: lalithk90.github.io)
-  - LinkedIn: https://www.linkedin.com/in/lalithk90
-
-**Core Research Team**:
-- Thiwanka U - https://www.linkedin.com/in/thiwankau/
-- Pamuditha Leo - https://www.linkedin.com/in/pamuditha-leo/
-- Aparna Thewarapperuma - https://www.linkedin.com/in/aparna-thewarapperuma-834ab824a/
-- Tuwan Jaleel - https://www.linkedin.com/in/tuwan-jaleel-1o1/
-
-### Documentation & Code Clarity
-
-This project's comprehensive, educational documentation was developed with the assistance of **GitHub Copilot**, an AI-powered code completion and documentation tool. Copilot helped with:
-
-- Initial code structure and suggestions
-- Documentation framework and organization
-- Code examples and explanations
-
-**Important note**: While Copilot provided valuable assistance, every line of final documentation was carefully reviewed, refined, and validated by the research team to ensure:
-
-- Accuracy of security concepts and methodologies
-- Real-world relevance and practical applicability
-- Transparency about technical design decisions
-- Educational effectiveness for teaching domain security research
-
-The documentation transformation from generic patterns to human-centered explanations with real examples and design rationale was a deliberate team effort to make this codebase serve as an effective learning resource.
-
-**Team's role**: Research, validation, refinement, and human-centered documentation that explains not just *what* the code does, but *why* security researchers make specific choices.
-
----
-
-## 🤝 Contributing
-
-This is an academic research project. Contributions are welcome via:
-
-1. Bug reports
-2. Feature requests
-3. Documentation improvements
-4. New security checks
-5. Performance optimizations
-
-Please open an issue first to discuss major changes.
-
----
-
-## 📞 Contact
-
-For questions, issues, or collaboration:
-
-- **Project**: LK Public Domain Security Audit
-- **Purpose**: Academic research on domain security
-- **Email**: askahatapitiya@gmail.com
-- **GitHub**: [Project Repository](https://github.com/LalithK90/lk-public-domain-security-audit)
-
----
-
-## 📅 Version History
-
-### v1.0 (Current)
-- Initial release
-- 30+ security checks across 7 categories
-- 12 subdomain discovery methods
-- SQLite-based persistent state
-- Parallel producer-consumer architecture
-- Comprehensive CSV/JSON output
-- Academic paper table generation
-
----
-
-## 🙏 Acknowledgments
-
-- Certificate Transparency logs (crt.sh)
-- HackerTarget API
-- ThreatCrowd API
-- Python community (aiohttp, dnspython, etc.)
-- SQLite project
-- Academic research community
-
----
-
-**End of Documentation**

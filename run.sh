@@ -44,17 +44,17 @@ fi
 
 # Activate virtual environment
 echo "Activating virtual environment..."
-source .venv/bin/activate
+. .venv/bin/activate
 
 # Install/upgrade dependencies
 if [ -f "src/requirements.txt" ]; then
     echo "Installing dependencies..."
-    pip install --quiet --upgrade pip
-    pip install --quiet -r src/requirements.txt
+    .venv/bin/pip install --quiet --upgrade pip
+    .venv/bin/pip install --quiet -r src/requirements.txt
 else
     echo "No requirements.txt found, installing minimal dependencies..."
-    pip install --quiet --upgrade pip
-    pip install --quiet aiohttp python-dotenv openpyxl pandas python-dateutil
+    .venv/bin/pip install --quiet --upgrade pip
+    .venv/bin/pip install --quiet aiohttp python-dotenv openpyxl pandas python-dateutil dnspython
 fi
 
 echo "✓ Environment ready"
@@ -62,7 +62,7 @@ echo ""
 
 # Run the scanner
 echo "Starting scan..."
-python src/app.py
+.venv/bin/python src/app.py
 
 # Check if scan completed successfully
 if [ $? -eq 0 ]; then
@@ -70,7 +70,7 @@ if [ $? -eq 0 ]; then
     echo "=========================================="
     echo "Generating Markdown reports..."
     echo "=========================================="
-    python src/generate_reports.py
+    .venv/bin/python src/generate_reports.py
     
     if [ $? -eq 0 ]; then
         echo ""
@@ -81,7 +81,6 @@ if [ $? -eq 0 ]; then
     fi
 else
     echo "✗ Scan failed. Skipping report generation."
-    deactivate
     exit 1
 fi
 
@@ -89,6 +88,3 @@ echo ""
 echo "=========================================="
 echo "✓ All tasks completed successfully"
 echo "=========================================="
-
-# Deactivate virtual environment
-deactivate

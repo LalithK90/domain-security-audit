@@ -59,6 +59,9 @@ state/
 backup/
 docs/
 
+# Research files and documentation
+research/
+
 
 *.pid
 *.log
@@ -71,3 +74,7 @@ docs/
 *.docx
 
 *.txt
+
+scan_all_lk_domains.sh
+scan_all_lk.log
+scan_errors.log

@@ -977,7 +977,7 @@ MODES:
     ap.add_argument("--root", type=str, default="out",
                     help="Root folder containing domain/date/run folders (batch mode, default: out).")
     ap.add_argument("--domain", type=str, default=None,
-                    help="Domain to scan for (batch mode). If not specified, reads from .env DOMAIN variable.")
+                    help="Domain to scan for (batch mode). If not specified, defaults to ac.lk (ignores .env).");
     ap.add_argument("--use-cache", action="store_true",
                     help="Compute optional evidence metrics from cache (batch mode).")
     
@@ -1010,18 +1010,11 @@ MODES:
         root = Path(args.root).expanduser().resolve()
         
         # Determine domain
-        domain = args.domain
-        if not domain:
-            # Try to read from .env
-            env_vars = load_env_file(Path(".env"))
-            domain = env_vars.get("DOMAIN")
-            if domain:
-                print(f"📖 Domain from .env: {domain}")
-            else:
-                print("Error: Domain not specified and .env DOMAIN variable not found", file=sys.stderr)
-                return 1
-        else:
+        domain = args.domain if args.domain else "ac.lk"
+        if args.domain:
             print(f"📖 Domain specified: {domain}")
+        else:
+            print(f"📖 Domain defaulting to: {domain} (ignoring .env)")
         
         # Find all run directories for this domain
         run_dirs = find_run_dirs(root, domain=domain)

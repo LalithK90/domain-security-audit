@@ -132,23 +132,27 @@ async def main_async(config: Config):
         # Wait for scanner to finish processing all eligible targets
         logger.info("Waiting for scanner to complete remaining targets...")
         scanner_worker = await scanner_task
+        scanned_count = scanner_worker.scanned_count
+        error_count = scanner_worker.error_count
 
         # Update run statistics
         stats = state_mgr.get_stats()
         state_mgr.update_run(
             run_id,
             enumerated=stats['total_candidates'],
-            scanned=scanner_worker.scanned_count,
-            errors=scanner_worker.error_count
+            scanned=scanned_count,
+            errors=error_count
         )
     else:
         # Passive-only: no scanning performed
         scanner_worker = None
+        scanned_count = 0
+        error_count = 0
         state_mgr.update_run(
             run_id,
             enumerated=stats['total_candidates'],
-            scanned=0,
-            errors=0
+            scanned=scanned_count,
+            errors=error_count
         )
         state_mgr.set_meta('enumeration_done', 'true')
     state_mgr.finish_run(run_id)
@@ -229,7 +233,7 @@ async def main_async(config: Config):
         # Compute domain-level summary stats
         domain_summary = {
             'total_subdomains': stats['total_candidates'],
-            'scanned_subdomains': scanner_worker.scanned_count,
+            'scanned_subdomains': scanned_count,
             'total_checks_run': len(check_results),
             'overall_pass_rate': (sum(1 for r in check_results if r.status == CheckStatus.PASS) /
                                   len([r for r in check_results if r.status in (CheckStatus.PASS, CheckStatus.FAIL)]) * 100)
@@ -247,9 +251,9 @@ async def main_async(config: Config):
                 'started_at': start_time.isoformat(),
                 'finished_at': datetime.utcnow().isoformat(),
                 'duration_seconds': (datetime.utcnow() - start_time).total_seconds(),
-                'scanned_count': scanner_worker.scanned_count,
+                'scanned_count': scanned_count,
                 'total_candidates': stats['total_candidates'],
-                'error_count': scanner_worker.error_count,
+                'error_count': error_count,
                 'rescan_hours': config.rescan_hours,
                 'config': config.to_dict()
             }
@@ -274,9 +278,9 @@ async def main_async(config: Config):
                 'started_at': start_time.isoformat(),
                 'finished_at': datetime.utcnow().isoformat(),
                 'duration_seconds': (datetime.utcnow() - start_time).total_seconds(),
-                'scanned_count': 0,
+                'scanned_count': scanned_count,
                 'total_candidates': stats['total_candidates'],
-                'error_count': scanner_worker.error_count,
+                'error_count': error_count,
                 'rescan_hours': config.rescan_hours,
                 'config': config.to_dict()
             }
@@ -293,8 +297,8 @@ async def main_async(config: Config):
     logger.info("Scan Complete!")
     logger.info(f"  Duration: {duration:.1f}s")
     logger.info(f"  Total candidates: {stats['total_candidates']}")
-    logger.info(f"  Scanned: {scanner_worker.scanned_count}")
-    logger.info(f"  Errors: {scanner_worker.error_count}")
+    logger.info(f"  Scanned: {scanned_count}")
+    logger.info(f"  Errors: {error_count}")
     logger.info(f"  Output: {output_dir}")
     logger.info("="*60)
     
@@ -303,8 +307,8 @@ async def main_async(config: Config):
         'run_id': run_id,
         'duration_seconds': duration,
         'total_candidates': stats['total_candidates'],
-        'scanned_count': scanner_worker.scanned_count,
-        'error_count': scanner_worker.error_count,
+        'scanned_count': scanned_count,
+        'error_count': error_count,
         'output_dir': str(output_dir)
     }
 
