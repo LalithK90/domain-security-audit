@@ -296,15 +296,24 @@ ALLOW_ACTIVE_PROBES=true    # Enables HTTP/TLS/email probing
 
 ```
 domain-security-audit/
-├── src/
+├── .env                          # Configuration (DOMAIN, ALLOW_ACTIVE_PROBES, etc.)
+├── README.md                     # This file
+├── run.sh                        # Execution script
+├── scan_all_lk_domains.sh        # Batch scanning helper
+├── scan_all_lk.log               # Batch scan log
+├── scan_errors.log               # Error log
+├── out/                          # Output reports and CSV files
+├── research/                     # Paper assets and supporting scripts
+├── src/                          # Scanner implementation
 │   ├── app.py                    # Main orchestrator
+│   ├── generate_reports.py       # Post-processing and reporting
 │   ├── requirements.txt          # Python dependencies
 │   ├── scanner/                  # Core scanning modules
-│   │   ├── runner.py            # Scan execution
-│   │   ├── enumeration.py       # Subdomain discovery
-│   │   ├── enumerator_worker.py # Worker orchestration
-│   │   ├── scan_worker.py       # Security checks
-│   │   ├── normalization.py     # Data normalization
+│   │   ├── runner.py             # Scan execution
+│   │   ├── enumeration.py        # Subdomain discovery
+│   │   ├── enumerator_worker.py  # Worker orchestration
+│   │   ├── scan_worker.py        # Security checks
+│   │   ├── normalization.py      # Data normalization
 │   │   ├── advanced_enumeration.py
 │   │   ├── advanced_checks.py
 │   │   ├── crawl_lite.py
@@ -313,20 +322,17 @@ domain-security-audit/
 │   │   ├── srv_pivot.py
 │   │   ├── xlsx_seed.py
 │   │   ├── profiles.py
-│   │   ├── checks/              # Security check registry
-│   │   ├── probes/              # HTTP, TLS, DNS, Email probes
-│   │   ├── output/              # Report generation
-│   │   └── scoring/             # Risk scoring model
+│   │   ├── checks/               # Security check registry
+│   │   ├── probes/               # HTTP, TLS, DNS, Email probes
+│   │   ├── output/               # Report generation
+│   │   └── scoring/              # Risk scoring model
 │   ├── state/                    # SQLite database layer
+│   ├── tests/                    # Unit tests
 │   └── util/                     # Configuration, logging, utilities
 ├── state/                        # SQLite databases (gov.lk/, ac.lk/, etc.)
-├── out/                          # Output reports and CSV files
-├── .env                          # Configuration (DOMAIN, ALLOW_ACTIVE_PROBES, etc.)
-├── README.md                     # This file
-├── permission_request_email.txt  # Email template for requesting permission
-├── run.sh                        # Execution script
-├── generate_reports.py           # Post-processing and reporting
-└── generate_paper_tables.py      # Research paper table generation
+├── .venv/                        # Local virtual environment (optional)
+├── .vscode/                      # Editor settings (optional)
+└── .git/                         # Repository metadata
 ```
 
 ---
