@@ -67,11 +67,15 @@ python src/app.py
 # Check if scan completed successfully
 if [ $? -eq 0 ]; then
     echo ""
+    echo "=========================================="
     echo "Generating Markdown reports..."
-    python generate_reports.py --root out/ac.lk --reports-dir out/ac.lk/REPORTS
+    echo "=========================================="
+    python src/generate_reports.py
     
     if [ $? -eq 0 ]; then
-        echo "✓ Reports generated in out/ac.lk/REPORTS/"
+        echo ""
+        echo "✓ Reports generated successfully!"
+        echo "   Location: out/{DOMAIN}/YYYY-MM-DD/YYYYMMDD_HHMMSS/report.md"
     else
         echo "⚠ Warning: Report generation failed or no runs found"
     fi
