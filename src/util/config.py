@@ -67,6 +67,9 @@ class Config:
         self.tls_timeout = float(os.getenv("TLS_TIMEOUT", "8.0"))
         self.http_user_agent = os.getenv(
             "HTTP_USER_AGENT", "LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)")
+        # Passive-only mode flag: when false, run only public-data methods
+        self.allow_active_probes = os.getenv(
+            "ALLOW_ACTIVE_PROBES", "true").lower() == "true"
         
         # ===== ENUMERATION =====
         self.use_ct_logs = os.getenv("USE_CT_LOGS", "true").lower() == "true"
@@ -93,6 +96,7 @@ class Config:
             'use_ct_logs': self.use_ct_logs,
             'use_public_dbs': self.use_public_dbs,
             'use_dns_brute': self.use_dns_brute,
+            'allow_active_probes': self.allow_active_probes,
         }
     
     def __repr__(self) -> str:

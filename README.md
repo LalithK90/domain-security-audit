@@ -12,19 +12,162 @@ This is an academic research project for comprehensive security auditing of publ
 
 ## 📋 Table of Contents
 
-1. [Project Architecture](#project-architecture)
-2. [Key Features](#key-features)
-3. [Directory Structure](#directory-structure)
-4. [Core Components](#core-components)
-5. [Security Checks](#security-checks)
-6. [Data Flow](#data-flow)
-7. [Installation & Setup](#installation--setup)
-8. [Usage](#usage)
-9. [Output Files](#output-files)
-10. [Configuration](#configuration)
-11. [Technical Details](#technical-details)
-12. [Research Applications](#research-applications)
-13. [Documentation Approach](#documentation-approach)
+1. [Legal & Ethical Use](#legal--ethical-use)
+2. [Passive-Only Mode](#passive-only-mode-public-data)
+3. [Project Architecture](#project-architecture)
+4. [Key Features](#key-features)
+5. [Directory Structure](#directory-structure)
+6. [Core Components](#core-components)
+7. [Security Checks](#security-checks)
+8. [Data Flow](#data-flow)
+9. [Installation & Setup](#installation--setup)
+10. [Usage](#usage)
+11. [Output Files](#output-files)
+12. [Configuration](#configuration)
+13. [Technical Details](#technical-details)
+14. [Research Applications](#research-applications)
+15. [Documentation Approach](#documentation-approach)
+
+---
+
+## ⚖️ Legal & Ethical Use
+
+### ✅ Permitted Uses
+
+This tool may only be used for:
+
+1. **Domains You Own or Manage**
+   - Administrative security assessments of your own infrastructure
+   - Internal security posture evaluation
+
+2. **Authorized Security Research**
+   - Explicit written permission from domain owner(s)
+   - Include authorization documentation with all scans
+   - Follow responsible disclosure practices
+
+3. **Academic Research with IRB Approval**
+   - Institutional Review Board (IRB) approval for human subjects research
+   - Ethics committee clearance for security assessment studies
+   - Proper documentation and consent procedures
+
+### ⚠️ Legal Risks
+
+**Unauthorized security scanning may violate:**
+
+- **Computer Fraud and Abuse Act (CFAA)** - US federal law
+- **Computer Misuse Act 1990** - UK and similar legislation
+- **Criminal Code** - Canada and other common-law jurisdictions
+- **Criminal Justice Act** - EU member states
+- **Local cyber crime laws** - Jurisdiction-specific statutes
+
+**Legal consequences can include:**
+- Criminal prosecution and imprisonment
+- Civil liability and damages
+- Project termination and funding restrictions
+- Institutional disciplinary action
+- Professional reputation damage
+
+### 🛡️ Best Practices for Responsible Research
+
+1. **Get Authorization First**
+   ```
+   ✓ Email domain owner with research plan
+   ✓ Obtain written approval
+   ✓ Document permission in scan metadata
+   ✓ Follow agreed scope and timeline
+   ```
+
+2. **Transparent Identification**
+   ```
+   ✓ Use descriptive User-Agent header (configured by default)
+   ✓ Identify research purpose in HTTP headers
+   ✓ Include contact information for questions
+   ✓ Allow domain admins to identify your scanner in logs
+   ```
+
+3. **Respectful Scanning**
+   ```
+   ✓ Use default rate limiting (0.05s between requests)
+   ✓ Respect HTTP 429 (Too Many Requests) responses
+   ✓ Avoid peak traffic times for large scans
+   ✓ Stop immediately if domain owner requests it
+   ```
+
+4. **Responsible Disclosure**
+   ```
+   ✓ Report security issues found to domain owner
+   ✓ Provide adequate time for remediation (typically 90 days)
+   ✓ Don't publicly disclose vulnerabilities prematurely
+   ✓ Credit domain owner if they choose to acknowledge findings
+   ```
+
+### 📋 Institutional Requirements
+
+If using this tool for academic research:
+
+- **Get IRB/Ethics Approval** - Required for institutional research
+- **Document Authorization** - Save written permissions with results
+- **Notify IT/Security Team** - Inform institutional security office
+- **Follow Institutional Policies** - Comply with your institution's security policies
+- **Maintain Audit Trail** - Keep logs of who, what, when, where, why
+
+### 🚫 Prohibited Uses
+
+**Do NOT use this tool to:**
+- Scan domains without authorization
+- Perform reconnaissance for attacks
+- Identify vulnerable targets for exploitation
+- Bypass authentication or access controls
+- Exfiltrate data or credentials
+- Disrupt services or cause denial-of-service
+- Violate any applicable laws or regulations
+
+### ⚡ Disclaimer
+
+By using this tool, you agree that:
+
+1. You have authorization to scan the target domain(s)
+2. You understand the legal risks in your jurisdiction
+3. You will use the tool responsibly and ethically
+4. You will comply with all applicable laws and regulations
+5. You assume all legal and financial responsibility for misuse
+
+**The authors and contributors are not responsible for:**
+- Unauthorized use of this tool
+- Legal consequences from misuse
+- Damage caused by scanning without permission
+- Violation of laws in any jurisdiction
+- Institutional disciplinary action
+- Any damages resulting from tool misuse
+
+---
+
+## 🕊️ Passive-Only Mode (Public Data)
+
+Set `ALLOW_ACTIVE_PROBES=false` in `.env` to run **passive-only**. This mode uses only publicly available data and avoids active probing.
+
+**What runs (allowed):**
+- Certificate Transparency logs (crt.sh)
+- Public databases (HackerTarget, ThreatCrowd)
+- XLSX seeds / prior reports
+- Basic DNS/WHOIS lookups needed to resolve public records
+
+**What is skipped (active):**
+- DNS brute-force pattern probing
+- SRV record sweeps
+- HTTP/HTTPS reachability tests
+- Crawl-lite content extraction
+- PTR reverse DNS pivots
+- Scanner probes (HTTP/TLS/Email) and security checks
+
+**When to use:**
+- No explicit permission yet (discovery-only)
+- Legal/ethical constraints require passive reconnaissance
+- Pre-authorization scoping for later active testing
+
+**Impact:**
+- Faster, lower-impact runs; results limited to public evidence
+- Scanner stage is disabled; outputs include enumerated candidates and method counts
 
 ---
 
@@ -510,6 +653,11 @@ LOG_LEVEL=INFO
 
 # User-Agent for HTTP requests (responsible disclosure)
 HTTP_USER_AGENT=LK-Domain-Security-Research/1.0 (Academic Study; mailto:security-research@example.edu)
+
+# Active probing flag (default: true)
+# true  -> run all probes (HTTP/TLS/Email) with permission
+# false -> passive-only (public data: CT logs, public DBs, WHOIS/DNS lookups)
+ALLOW_ACTIVE_PROBES=true
 ```
 
 ### Step 3: Run Setup Script

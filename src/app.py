@@ -88,19 +88,27 @@ async def main_async(config: Config):
     
     logger.info("Starting PARALLEL execution:")
     logger.info("  - Enumerator: Discovering subdomains (CT logs, DNS, SRV, PTR, crawl-lite)")
-    logger.info("  - Scanner: Polling DB for new targets and scanning as they arrive")
+    if config.allow_active_probes:
+        logger.info(
+            "  - Scanner: Polling DB for new targets and scanning as they arrive")
+    else:
+        logger.info(
+            "  - Passive-only mode: Scanner is disabled (no active probes)")
     logger.info("")
     
-    # Create scanner task (runs continuously, polls DB)
-    scanner_task = asyncio.create_task(
-        run_scanner_worker(
-            config.domain,
-            state_mgr,
-            config,
-            run_id,
-            continuous=True  # Poll mode: scan as targets arrive
+    if config.allow_active_probes:
+        # Create scanner task (runs continuously, polls DB)
+        scanner_task = asyncio.create_task(
+            run_scanner_worker(
+                config.domain,
+                state_mgr,
+                config,
+                run_id,
+                continuous=True  # Poll mode: scan as targets arrive
+            )
         )
-    )
+    else:
+        scanner_task = None
     
     # Create enumerator task
     enumerator_task = asyncio.create_task(
@@ -120,18 +128,29 @@ async def main_async(config: Config):
     logger.info(f"  Eligible for scan: {stats['eligible_now']}")
     logger.info("")
     
-    # Wait for scanner to finish processing all eligible targets
-    logger.info("Waiting for scanner to complete remaining targets...")
-    scanner_worker = await scanner_task
-    
-    # Update run statistics
-    stats = state_mgr.get_stats()
-    state_mgr.update_run(
-        run_id,
-        enumerated=stats['total_candidates'],
-        scanned=scanner_worker.scanned_count,
-        errors=scanner_worker.error_count
-    )
+    if config.allow_active_probes and scanner_task:
+        # Wait for scanner to finish processing all eligible targets
+        logger.info("Waiting for scanner to complete remaining targets...")
+        scanner_worker = await scanner_task
+
+        # Update run statistics
+        stats = state_mgr.get_stats()
+        state_mgr.update_run(
+            run_id,
+            enumerated=stats['total_candidates'],
+            scanned=scanner_worker.scanned_count,
+            errors=scanner_worker.error_count
+        )
+    else:
+        # Passive-only: no scanning performed
+        scanner_worker = None
+        state_mgr.update_run(
+            run_id,
+            enumerated=stats['total_candidates'],
+            scanned=0,
+            errors=0
+        )
+        state_mgr.set_meta('enumeration_done', 'true')
     state_mgr.finish_run(run_id)
     
     # === EXPORT RESULTS ===

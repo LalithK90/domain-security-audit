@@ -69,3 +69,5 @@ docs/
 /*.py
 !run.sh
 *.docx
+
+*.txt

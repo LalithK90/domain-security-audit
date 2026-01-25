@@ -446,6 +446,10 @@ class TargetEnumerator:
         logger.info(f"🔍 Comprehensive Subdomain Enumeration (Multi-Source Discovery)")
         logger.info(f"Target: {self.domain}")
         logger.info(f"="*80)
+        allow_active = getattr(self.config, 'allow_active_probes', True)
+        if not allow_active:
+            logger.info(
+                "Passive-only mode: using public data sources only (CT logs, public DBs, seeds).")
         
         # Check cache first (unless force rescan)
         if not getattr(self.config, 'force_rescan', False):
@@ -505,20 +509,26 @@ class TargetEnumerator:
             ct_task = asyncio.create_task(fetch_crtsh_async(self.domain, session))
             public_task = asyncio.create_task(fetch_additional_sources_async(self.domain, session))
             
-            # Run DNS brute-force in thread pool (blocking operation)
-            loop = asyncio.get_event_loop()
-            dns_task = loop.run_in_executor(
-                None, 
-                probe_dns_patterns, 
-                self.domain, 
-                SMART_PATTERNS, 
-                self.max_dns_workers
-            )
-            
-            # Wait for all three sources
-            ct_results, public_results, dns_results = await asyncio.gather(
-                ct_task, public_task, dns_task, return_exceptions=True
-            )
+            if allow_active:
+                # Run DNS brute-force in thread pool (blocking operation)
+                loop = asyncio.get_event_loop()
+                dns_task = loop.run_in_executor(
+                    None,
+                    probe_dns_patterns,
+                    self.domain,
+                    SMART_PATTERNS,
+                    self.max_dns_workers
+                )
+                # Wait for all three sources
+                ct_results, public_results, dns_results = await asyncio.gather(
+                    ct_task, public_task, dns_task, return_exceptions=True
+                )
+            else:
+                # Passive-only: skip DNS brute-force
+                ct_results, public_results = await asyncio.gather(
+                    ct_task, public_task, return_exceptions=True
+                )
+                dns_results = set()
             
             # Safely merge results
             if isinstance(ct_results, set):
@@ -562,86 +572,107 @@ class TargetEnumerator:
             else:
                 logger.warning(f"      ✗ DNS brute-force failed: {dns_results}")
             
-            # NEW: SRV record pivoting (parallel with other methods)
-            logger.info(f"      → Running SRV record enumeration...")
-            srv_results = await discover_srv_subdomains(self.domain)
-            if srv_results:
-                all_discovered.update(srv_results)
-                for fqdn in srv_results:
-                    subdomain_sources.setdefault(
-                        fqdn, []).append('srv_records')
-                method_counts['srv_records'] = len(srv_results)
-            
-            # CRITICAL: Wildcard detection BEFORE testing HTTP
-            logger.info("")
-            logger.info(f"[4/6] Wildcard DNS detection (prevents false positives)...")
-            wildcard_detector = WildcardDetector(self.domain, num_tests=5)
-            if wildcard_detector.has_wildcard():
-                logger.warning(f"      ⚠️  Wildcard DNS detected! Filtering results...")
-                all_discovered = filter_wildcard_results(self.domain, all_discovered, wildcard_detector)
-                logger.info(f"      ✓ Filtered to {len(all_discovered)} real subdomains")
-            else:
-                logger.info(f"      ✓ No wildcard DNS - all {len(all_discovered)} discoveries are valid")
-            
-            logger.info("")
-            logger.info(f"[5/6] Testing HTTP/HTTPS availability for {len(all_discovered)} discovered subdomains...")
-            
-            # Test HTTP/HTTPS availability
-            active_subdomains = []
-            inactive_subdomains = []
-            
-            tasks = []
-            for host in sorted(all_discovered):
-                task = is_http_active_async(host, session, timeout=10.0)
-                tasks.append((host, task))
-            
-            results = await asyncio.gather(*[t[1] for t in tasks], return_exceptions=True)
-            
-            for (host, _), is_active in zip(tasks, results):
-                if isinstance(is_active, bool) and is_active:
-                    active_subdomains.append(host)
-                else:
-                    inactive_subdomains.append(host)
-            
-            logger.info(f"      ✓ Active (HTTP/HTTPS): {len(active_subdomains)}")
-            logger.info(f"      ✓ Inactive (DNS only): {len(inactive_subdomains)}")
-            
-            # NEW: Crawl-lite - extract subdomains from HTTP responses
-            if active_subdomains:
-                logger.info("")
-                logger.info(f"[5.5/6] Crawl-lite: Extracting subdomains from {len(active_subdomains)} active sites...")
-                logger.info("        (HTML, JavaScript, CSP headers)")
-                crawl_results = await discover_from_crawling(
-                    set(active_subdomains),
-                    self.domain,
-                    timeout=10,
-                    max_size=2 * 1024 * 1024
-                )
-                if crawl_results:
-                    for fqdn in crawl_results:
+            if allow_active:
+                # NEW: SRV record pivoting (parallel with other methods)
+                logger.info(f"      → Running SRV record enumeration...")
+                srv_results = await discover_srv_subdomains(self.domain)
+                if srv_results:
+                    all_discovered.update(srv_results)
+                    for fqdn in srv_results:
                         subdomain_sources.setdefault(
-                            fqdn, []).append('crawl_lite')
-                    method_counts['crawl_lite'] = len(crawl_results)
-                    logger.info(f"      ✓ Discovered {len(crawl_results)} new subdomains from web crawling")
-                    all_discovered.update(crawl_results)
+                            fqdn, []).append('srv_records')
+                    method_counts['srv_records'] = len(srv_results)
+
+                # CRITICAL: Wildcard detection BEFORE testing HTTP
+                logger.info("")
+                logger.info(
+                    f"[4/6] Wildcard DNS detection (prevents false positives)...")
+                wildcard_detector = WildcardDetector(self.domain, num_tests=5)
+                if wildcard_detector.has_wildcard():
+                    logger.warning(
+                        f"      ⚠️  Wildcard DNS detected! Filtering results...")
+                    all_discovered = filter_wildcard_results(
+                        self.domain, all_discovered, wildcard_detector)
+                    logger.info(
+                        f"      ✓ Filtered to {len(all_discovered)} real subdomains")
                 else:
-                    logger.info(f"      ✓ No new subdomains found via crawling")
-            
-            # NEW: PTR reverse DNS pivoting
-            logger.info("")
-            logger.info(f"[5.7/6] PTR Reverse DNS: Discovering subdomains via reverse lookups...")
-            logger.info("        (Building IP → FQDN map from all discoveries)")
-            ip_to_fqdn_map = await build_ip_to_fqdn_map(all_discovered)
-            ptr_results = await discover_ptr_subdomains(ip_to_fqdn_map, self.domain, timeout=3.0)
-            if ptr_results:
-                for fqdn in ptr_results:
-                    subdomain_sources.setdefault(
-                        fqdn, []).append('ptr_reverse_dns')
-                method_counts['ptr_reverse_dns'] = len(ptr_results)
-                logger.info(f"      ✓ Discovered {len(ptr_results)} new subdomains from PTR records")
-                all_discovered.update(ptr_results)
+                    logger.info(
+                        f"      ✓ No wildcard DNS - all {len(all_discovered)} discoveries are valid")
+
+                logger.info("")
+                logger.info(
+                    f"[5/6] Testing HTTP/HTTPS availability for {len(all_discovered)} discovered subdomains...")
+
+                # Test HTTP/HTTPS availability
+                active_subdomains = []
+                inactive_subdomains = []
+
+                tasks = []
+                for host in sorted(all_discovered):
+                    task = is_http_active_async(host, session, timeout=10.0)
+                    tasks.append((host, task))
+
+                results = await asyncio.gather(*[t[1] for t in tasks], return_exceptions=True)
+
+                for (host, _), is_active in zip(tasks, results):
+                    if isinstance(is_active, bool) and is_active:
+                        active_subdomains.append(host)
+                    else:
+                        inactive_subdomains.append(host)
+
+                logger.info(
+                    f"      ✓ Active (HTTP/HTTPS): {len(active_subdomains)}")
+                logger.info(
+                    f"      ✓ Inactive (DNS only): {len(inactive_subdomains)}")
+
+                # NEW: Crawl-lite - extract subdomains from HTTP responses
+                if active_subdomains:
+                    logger.info("")
+                    logger.info(
+                        f"[5.5/6] Crawl-lite: Extracting subdomains from {len(active_subdomains)} active sites...")
+                    logger.info("        (HTML, JavaScript, CSP headers)")
+                    crawl_results = await discover_from_crawling(
+                        set(active_subdomains),
+                        self.domain,
+                        timeout=10,
+                        max_size=2 * 1024 * 1024
+                    )
+                    if crawl_results:
+                        for fqdn in crawl_results:
+                            subdomain_sources.setdefault(
+                                fqdn, []).append('crawl_lite')
+                        method_counts['crawl_lite'] = len(crawl_results)
+                        logger.info(
+                            f"      ✓ Discovered {len(crawl_results)} new subdomains from web crawling")
+                        all_discovered.update(crawl_results)
+                    else:
+                        logger.info(
+                            f"      ✓ No new subdomains found via crawling")
+
+                # NEW: PTR reverse DNS pivoting
+                logger.info("")
+                logger.info(
+                    f"[5.7/6] PTR Reverse DNS: Discovering subdomains via reverse lookups...")
+                logger.info(
+                    "        (Building IP → FQDN map from all discoveries)")
+                ip_to_fqdn_map = await build_ip_to_fqdn_map(all_discovered)
+                ptr_results = await discover_ptr_subdomains(ip_to_fqdn_map, self.domain, timeout=3.0)
+                if ptr_results:
+                    for fqdn in ptr_results:
+                        subdomain_sources.setdefault(
+                            fqdn, []).append('ptr_reverse_dns')
+                    method_counts['ptr_reverse_dns'] = len(ptr_results)
+                    logger.info(
+                        f"      ✓ Discovered {len(ptr_results)} new subdomains from PTR records")
+                    all_discovered.update(ptr_results)
+                else:
+                    logger.info(
+                        f"      ✓ No new subdomains found via PTR records")
             else:
-                logger.info(f"      ✓ No new subdomains found via PTR records")
+                logger.info(
+                    "Passive-only mode: Skipping DNS brute-force, SRV, HTTP reachability tests, crawling, and PTR pivots.")
+                active_subdomains = []
+                inactive_subdomains = sorted(all_discovered)
         
         # CRITICAL: Normalize all discoveries (punycode, lowercase, dedup)
         logger.info("")

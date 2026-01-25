@@ -102,6 +102,9 @@ class EnumeratorWorker:
         """
         self._running = True
         logger.info(f"🔍 Enumerator worker starting for {self.domain}")
+        if not self.config.allow_active_probes:
+            logger.info(
+                "Passive-only mode enabled: running CT logs, public databases, and seeds (no active probes).")
         
         try:
             # Check if enumeration is fresh (< 24h old)
@@ -115,7 +118,12 @@ class EnumeratorWorker:
             
             # Run comprehensive enumeration
             logger.info("Starting comprehensive subdomain enumeration...")
-            logger.info(f"  Methods: CT logs, Public DBs, DNS brute-force (18,991 patterns)")
+            if self.config.allow_active_probes:
+                logger.info(
+                    f"  Methods: CT logs, Public DBs, DNS brute-force (18,991 patterns)")
+            else:
+                logger.info(
+                    f"  Methods: CT logs, Public DBs, XLSX seeds (passive-only)")
             
             # Enumerate (this returns a list of ScanTarget objects)
             discovered_targets = await self.enumerator.enumerate_async()
