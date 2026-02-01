@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Domain Security Audit Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700,800|Raleway:400,500,600,700,800" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="top-bar">
+    <div class="container">
+      <div class="brand">
+        <strong>Domain Security Audit</strong>
+        <span>Domain Security Audit Project Team</span>
+      </div>
+      <div class="top-links">
+        <a href="#usage">Usage Models</a>
+        <a href="#features">Features</a>
+        <a href="#outputs">Outputs</a>
+        <a href="#contact">Contact</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="container">
+      <div class="nav-links">
+        <a href="#overview">Overview</a>
+        <a href="#research">Research</a>
+        <a href="#quickstart">Quick Start</a>
+        <a href="#legal">Legal & Ethics</a>
+      </div>
+    </div>
+  </div>
+
+  <section class="hero" id="overview">
+    <div class="container">
+      <div>
+        <div class="badge">Passive Enumeration</div>
+        <div class="badge">Active Security Checks (Optional)</div>
+        <h1>Domain Security Audit Platform</h1>
+        <p>
+          A research-grade platform for large-scale domain infrastructure mapping and security posture assessment.
+          Built for academic research and self-audits by domain owners.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://github.com/LalithK90/domain-security-audit" target="_blank" rel="noopener">View GitHub Repository</a>
+          <a class="btn btn-secondary" href="#quickstart">Get Started</a>
+        </div>
+      </div>
+      <div class="media">
+        <img src="assets/figures/method_effectiveness_bar.png" alt="Enumeration Method Effectiveness" />
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="container">
+      <h2>Key Capabilities</h2>
+      <div class="card-grid">
+        <div class="card">
+          <h3>Subdomain Enumeration</h3>
+          <p>12 discovery methods including Certificate Transparency, public databases, DNS analysis, and seed lists.</p>
+        </div>
+        <div class="card">
+          <h3>Security Assessments</h3>
+          <p>30+ checks across HTTPS/TLS, email security, DNS security, and HTTP headers.</p>
+        </div>
+        <div class="card">
+          <h3>Research-Grade Outputs</h3>
+          <p>CSV, Excel, JSON, and Markdown reports with statistics and visualizations.</p>
+        </div>
+        <div class="card">
+          <h3>Ethical by Design</h3>
+          <p>Passive-only mode uses public data sources, enabling legally compliant research.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="usage">
+    <div class="container">
+      <h2>Two Usage Models</h2>
+      <div class="split">
+        <div class="card">
+          <h3>Model 1 — Academic Research</h3>
+          <p>Passive-only mode for legally compliant research and publication.</p>
+          <ul class="list">
+            <li>Certificate Transparency, public databases, DNS, WHOIS</li>
+            <li>No permission required</li>
+            <li>Best for national-scale infrastructure studies</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Model 2 — Domain Owner Self-Audit</h3>
+          <p>Active checks for domains you own or have permission to test.</p>
+          <ul class="list">
+            <li>HTTPS/TLS validation, email security, headers</li>
+            <li>Requires ownership or written authorization</li>
+            <li>Operational security posture reporting</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="research">
+    <div class="container">
+      <h2>Research Focus</h2>
+      <div class="highlight">
+        Phase 1 delivers a comprehensive passive enumeration baseline for Sri Lankan TLDs. Phase 2 proposes
+        authorized active security assessments for deeper risk evaluation.
+      </div>
+      <div class="split" style="margin-top: 18px;">
+        <div class="media">
+          <img src="assets/figures/method_effectiveness_heatmap.png" alt="Method Effectiveness Heatmap" />
+        </div>
+        <div>
+          <h3>Phase 1 Highlights</h3>
+          <ul class="list">
+            <li>21,148 subdomains across 16 .lk TLDs</li>
+            <li>Certificate Transparency coverage: 99.85%</li>
+            <li>Education sector represents 40.1% of infrastructure</li>
+          </ul>
+          <h3 style="margin-top: 16px;">Phase 2 Scope (Planned)</h3>
+          <ul class="list">
+            <li>TLS configuration quality, certificate hygiene</li>
+            <li>Email authentication: SPF, DKIM, DMARC</li>
+            <li>HTTP security headers and DNS security</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="quickstart">
+    <div class="container">
+      <h2>Quick Start</h2>
+      <div class="card">
+        <ol class="list">
+          <li>Install dependencies: <strong>Python 3.8+</strong></li>
+          <li>Install packages: <code>pip install -r src/requirements.txt</code></li>
+          <li>Create .env: <code>DOMAIN=gov.lk</code> and <code>ALLOW_ACTIVE_PROBES=false</code></li>
+          <li>Run scan: <code>./run.sh</code> or <code>python src/app.py</code></li>
+          <li>Review outputs in <code>out/</code> folder</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="outputs">
+    <div class="container">
+      <h2>Outputs</h2>
+      <div class="card-grid">
+        <div class="card">
+          <h3>CSV & JSON</h3>
+          <p>Discovered subdomains, enumeration statistics, and run metadata for analysis.</p>
+        </div>
+        <div class="card">
+          <h3>Excel Reports</h3>
+          <p>Pivot tables, charts, and summary metrics for reporting.</p>
+        </div>
+        <div class="card">
+          <h3>Markdown Report</h3>
+          <p>Human-readable summary with findings and recommendations.</p>
+        </div>
+        <div class="card">
+          <h3>Figures</h3>
+          <p>Automated visualizations for research and publications.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="legal">
+    <div class="container">
+      <h2>Legal & Ethical Use</h2>
+      <div class="split">
+        <div class="card">
+          <h3>Passive-Only (Recommended)</h3>
+          <p>Uses only public data sources. Fully legal in all jurisdictions.</p>
+          <ul class="list">
+            <li>Certificate Transparency logs</li>
+            <li>Public vulnerability databases</li>
+            <li>DNS and WHOIS records</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Active Scanning (With Permission)</h3>
+          <p>Only for domains you own or have written authorization to test.</p>
+          <ul class="list">
+            <li>HTTP/TLS probing</li>
+            <li>Email server checks</li>
+            <li>Security header validation</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="contact">
+    <div class="container">
+      <h2>Contact</h2>
+      <div class="card">
+        <p><strong>Maintainer:</strong> Domain Security Audit Project Team</p>
+        <p><strong>Email:</strong> <a href="mailto:asakahtapitiya@gmail.com">asakahtapitiya@gmail.com</a></p>
+        <p><strong>ORCID:</strong> <a href="https://orcid.org/0009-0007-3364-7811" target="_blank" rel="noopener">0009-0007-3364-7811</a></p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <p><strong>Domain Security Audit Platform</strong> — Project Team</p>
+      <p>Built for ethical research and responsible domain security assessment.</p>
+      <p>© 2026 Domain Security Audit Project Team</p>
+    </div>
+  </footer>
+</body>
+</html>

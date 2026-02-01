@@ -57,23 +57,25 @@ state/
 
 # Backups
 backup/
-docs/
 
-# Research files and documentation
-research/
+
 
 
 *.pid
 *.log
 # Enforce clean root directory structure
 # Only .env and run.sh allowed in root
-docs/
+
 # All Python code goes in src/
-/*.py
 !run.sh
+.pytest_cache/
 
 *.txt
 
+# Research files and documentation
+lk_domain_audit_phase_1/
+lk_domain_audit_phase_2/
+research/
 scan_all_lk_domains.sh
 scan_all_lk.log
 scan_errors.log
