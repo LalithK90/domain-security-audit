@@ -70,7 +70,6 @@ backup/
 !run.sh
 .pytest_cache/
 
-*.txt
 
 # Research files and documentation
 lk_domain_audit_phase_1/
