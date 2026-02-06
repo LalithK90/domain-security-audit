@@ -499,17 +499,32 @@ class TargetEnumerator:
         connector = aiohttp.TCPConnector(limit=100, limit_per_host=10)
         
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+            # EARLY WILDCARD DETECTION (before brute-force)
+            # WHY: If domain has wildcard DNS, brute-force will find 18,953 false positives
+            # Testing 5 random subdomains takes <1 second vs 2-3 minutes for full brute-force
+            skip_brute = False
+            if allow_active and self.config.skip_brute_on_wildcard:
+                logger.info("")
+                logger.info("[0/6] Early wildcard detection (checking 5 random subdomains)...")
+                wildcard_detector = WildcardDetector(self.domain, num_tests=5)
+                if wildcard_detector.has_wildcard():
+                    logger.warning(f"      ⚠️  Wildcard DNS detected! Skipping DNS brute-force (would find 18,953 false positives)")
+                    skip_brute = True
+                else:
+                    logger.info(f"      ✓ No wildcard DNS - proceeding with brute-force")
+            
             # PARALLEL DATA GATHERING (Layers 1-3)
             logger.info("")
             logger.info("[1-4/6] Parallel data gathering (CT logs + Public DBs + DNS brute-force)")
-            logger.info(f"         This will test {len(SMART_PATTERNS):,} patterns (~2-3 minutes)...")
+            if not skip_brute:
+                logger.info(f"         This will test {len(SMART_PATTERNS):,} patterns (~2-3 minutes)...")
             logger.info("")
             
             # Run CT logs and public sources in parallel
             ct_task = asyncio.create_task(fetch_crtsh_async(self.domain, session))
             public_task = asyncio.create_task(fetch_additional_sources_async(self.domain, session))
             
-            if allow_active:
+            if allow_active and not skip_brute:
                 # Run DNS brute-force in thread pool (blocking operation)
                 loop = asyncio.get_event_loop()
                 dns_task = loop.run_in_executor(
@@ -524,7 +539,9 @@ class TargetEnumerator:
                     ct_task, public_task, dns_task, return_exceptions=True
                 )
             else:
-                # Passive-only: skip DNS brute-force
+                # Passive-only OR wildcard detected: skip DNS brute-force
+                if skip_brute:
+                    logger.info("      ⏩ Skipping DNS brute-force (wildcard detected)")
                 ct_results, public_results = await asyncio.gather(
                     ct_task, public_task, return_exceptions=True
                 )
@@ -583,6 +600,14 @@ class TargetEnumerator:
                             fqdn, []).append('srv_records')
                     method_counts['srv_records'] = len(srv_results)
 
+                # Include manually known subdomains (if configured)
+                known_set = set(self.config.known_subdomains) if getattr(self.config, "known_subdomains", None) else set()
+                if known_set:
+                    for fqdn in known_set:
+                        if fqdn.endswith(self.domain):
+                            all_discovered.add(fqdn)
+                            subdomain_sources.setdefault(fqdn, []).append('manual_known')
+
                 # CRITICAL: Wildcard detection BEFORE testing HTTP
                 logger.info("")
                 logger.info(
@@ -592,7 +617,7 @@ class TargetEnumerator:
                     logger.warning(
                         f"      ⚠️  Wildcard DNS detected! Filtering results...")
                     all_discovered = filter_wildcard_results(
-                        self.domain, all_discovered, wildcard_detector)
+                        self.domain, all_discovered, wildcard_detector, keep_fqdns=known_set)
                     logger.info(
                         f"      ✓ Filtered to {len(all_discovered)} real subdomains")
                 else:

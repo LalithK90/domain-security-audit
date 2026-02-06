@@ -87,11 +87,11 @@ def md_df_table(df: pd.DataFrame) -> str:
         out = df.copy()
         out = out.fillna("NA")
         return out.to_markdown(index=False)
-    except AttributeError:
-        print("Warning: pandas.DataFrame.to_markdown() requires tabulate package.", file=sys.stderr)
-        print("Install with: pip install tabulate", file=sys.stderr)
-        # Fallback to simple format
-        return str(out)
+    except Exception as e:
+        print(
+            f"Warning: markdown table generation failed ({type(e).__name__}: {e}).", file=sys.stderr)
+        print("Falling back to simple string format.", file=sys.stderr)
+        return str(df)
 
 
 def pick_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
@@ -438,7 +438,191 @@ def build_report(run_dir: Path, out_dir: Path, use_cache: bool) -> Path:
         md_path = out_dir / f"{run_dir.parent.name}__{run_dir.name}.md"
     
     md_path.write_text("\n".join(report_lines).strip() + "\n", encoding="utf-8")
-    return md_path
+
+
+def build_pdf_report(run_dir: Path, meta: Dict, disc: pd.DataFrame, subm: pd.DataFrame, enum: pd.DataFrame, obs: pd.DataFrame = None, ctrl: pd.DataFrame = None, errs: pd.DataFrame = None) -> Optional[Path]:
+    """Generate a comprehensive PDF report for a run directory.
+
+    Enhanced version with detailed tables, charts, and analysis.
+    """
+    try:
+        from scanner.reporting.pdf_generator import PDFReportGenerator
+    except Exception as e:
+        print(
+            f"Warning: PDF generation unavailable: {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+    # Load additional dataframes if not provided
+    if obs is None:
+        try:
+            obs = safe_read_csv(run_dir / "observations_long.csv")
+        except:
+            obs = pd.DataFrame()
+
+    if ctrl is None:
+        try:
+            ctrl = safe_read_csv(run_dir / "control_metrics.csv")
+        except:
+            ctrl = pd.DataFrame()
+
+    if errs is None:
+        try:
+            errs = safe_read_csv(run_dir / "errors.csv")
+        except:
+            errs = pd.DataFrame()
+
+    # Enumeration methods used with counts
+    methods_used: List[str] = []
+    method_counts: Dict[str, int] = {}
+    if not enum.empty and "discovery_method" in enum.columns and "subdomain_count" in enum.columns:
+        for _, row in enum.iterrows():
+            try:
+                method = str(row["discovery_method"])
+                count = int(row["subdomain_count"])
+                if count > 0:
+                    methods_used.append(method)
+                    method_counts[method] = count
+            except Exception:
+                continue
+
+    # Detailed subdomain information
+    subdomain_details: List[Dict] = []
+    if not disc.empty:
+        for _, row in disc.iterrows():
+            detail = {
+                'fqdn': str(row.get('fqdn', 'N/A')),
+                'ip': str(row.get('ip_address', row.get('ip', 'N/A'))),
+                'method': str(row.get('discovery_method', row.get('method', 'N/A')))
+            }
+            subdomain_details.append(detail)
+
+    # Subdomains list (for backward compatibility)
+    subdomains: List[str] = [d['fqdn'] for d in subdomain_details]
+
+    # Security checks summary - aggregate from observations
+    security_findings: List[Dict] = []
+    if not obs.empty and "check_id" in obs.columns and "status" in obs.columns:
+        check_summary = obs.groupby(
+            ['check_id', 'status']).size().reset_index(name='count')
+        for _, row in check_summary.iterrows():
+            # Determine severity based on check type
+            check_id = str(row['check_id'])
+            severity = 'Medium'
+            if 'CRITICAL' in check_id or 'TAKEOVER' in check_id:
+                severity = 'Critical'
+            elif 'TLS' in check_id or 'CERT' in check_id:
+                severity = 'High'
+            elif 'HEADER' in check_id or 'COOKIE' in check_id:
+                severity = 'Low'
+
+            security_findings.append({
+                'check': check_id,
+                'status': str(row['status']),
+                'count': int(row['count']),
+                'severity': severity
+            })
+
+    # Calculate passed/failed from subdomain metrics
+    passed = int(subm["passed_checks"].sum()
+                 ) if "passed_checks" in subm.columns else 0
+    failed = int(subm["failed_checks"].sum()
+                 ) if "failed_checks" in subm.columns else 0
+
+    # Risk assessment from subdomain_metrics
+    risk_distribution: Dict[str, int] = {}
+    if not subm.empty and 'risk_level' in subm.columns:
+        risk_counts = subm['risk_level'].value_counts()
+        for risk, count in risk_counts.items():
+            risk_distribution[str(risk)] = int(count)
+
+    # Email security analysis from observations
+    email_security = {}
+    if not obs.empty:
+        # SPF records
+        spf_obs = obs[obs['check_id'].str.contains(
+            'SPF', case=False, na=False)]
+        email_security['spf'] = {
+            'has_spf': len(spf_obs[spf_obs['status'] == 'Pass']) > 0,
+            'count': len(spf_obs)
+        }
+
+        # DMARC records
+        dmarc_obs = obs[obs['check_id'].str.contains(
+            'DMARC', case=False, na=False)]
+        email_security['dmarc'] = {
+            'has_dmarc': len(dmarc_obs[dmarc_obs['status'] == 'Pass']) > 0,
+            'count': len(dmarc_obs)
+        }
+
+    # Takeover vulnerabilities
+    takeover_data = {}
+    if not obs.empty:
+        takeover_obs = obs[obs['check_id'].str.contains(
+            'TAKEOVER', case=False, na=False)]
+        critical_takeover = len(takeover_obs[takeover_obs['status'] == 'Fail'])
+        takeover_data = {
+            'critical': critical_takeover,
+            'high': 0  # Could be enhanced based on severity field
+        }
+
+    # Recommendations based on findings
+    recommendations: List[str] = []
+    if failed > passed:
+        recommendations.append(
+            "High number of failed security checks detected - immediate review recommended")
+    if email_security.get('spf', {}).get('has_spf') == False:
+        recommendations.append(
+            "Implement SPF records to prevent email spoofing")
+    if email_security.get('dmarc', {}).get('has_dmarc') == False:
+        recommendations.append(
+            "Deploy DMARC policy to improve email security posture")
+    if takeover_data.get('critical', 0) > 0:
+        recommendations.append(
+            "URGENT: Subdomain takeover vulnerabilities detected - remediate immediately")
+    if not obs.empty:
+        tls_fails = obs[(obs['check_id'] == 'TLS_AVAILABLE')
+                        & (obs['status'] == 'Fail')]
+        if len(tls_fails) > 0:
+            recommendations.append(
+                f"Enable TLS/HTTPS on {len(tls_fails)} subdomain(s) without encryption")
+    if len(recommendations) == 0:
+        recommendations.append(
+            "Continue monitoring and maintain current security posture")
+
+    # Error summary
+    error_summary = {}
+    if not errs.empty and 'reason_code' in errs.columns:
+        error_counts = errs['reason_code'].value_counts().head(5)
+        error_summary = {str(k): int(v) for k, v in error_counts.items()}
+
+    scan_results = {
+        "domain": meta.get("domain") or meta.get("root_domain") or "Unknown",
+        "scan_date": meta.get("started_at", "Unknown"),
+        "scan_id": meta.get("run_id", "N/A"),
+        "duration": meta.get("duration_seconds", meta.get("duration", "N/A")),
+        "total_targets": meta.get("targets_total", len(subdomains)),
+        "enumeration": {
+            "subdomains": subdomains,
+            "subdomain_details": subdomain_details,
+            "methods_used": methods_used,
+            "method_counts": method_counts,
+        },
+        "security_checks": {
+            "passed": passed,
+            "failed": failed,
+            "findings": security_findings,
+        },
+        "risk_assessment": risk_distribution,
+        "email_security": email_security,
+        "takeover": takeover_data,
+        "recommendations": recommendations,
+        "errors": error_summary,
+    }
+
+    pdf_path = run_dir / "report.pdf"
+    generator = PDFReportGenerator(str(pdf_path))
+    generator.generate_report(scan_results, str(pdf_path))
+    return pdf_path
 
 
 # ============================================================================
@@ -1010,11 +1194,18 @@ MODES:
         root = Path(args.root).expanduser().resolve()
         
         # Determine domain
-        domain = args.domain if args.domain else "ac.lk"
         if args.domain:
+            domain = args.domain
             print(f"📖 Domain specified: {domain}")
         else:
-            print(f"📖 Domain defaulting to: {domain} (ignoring .env)")
+            repo_root = Path(__file__).resolve().parent.parent
+            env_vars = load_env_file(repo_root / ".env")
+            domain = env_vars.get("DOMAIN", "ac.lk")
+            if "DOMAIN" in env_vars:
+                print(f"📖 Domain from .env: {domain}")
+            else:
+                print(
+                    f"📖 Domain defaulting to: {domain} (no .env DOMAIN found)")
         
         # Find all run directories for this domain
         run_dirs = find_run_dirs(root, domain=domain)
@@ -1029,10 +1220,39 @@ MODES:
             try:
                 # Generate report in the run directory itself
                 md_path = build_report(run_dir, run_dir, use_cache=args.use_cache)
-                print(f"✓ {run_dir.parent.name}/{run_dir.name}: {md_path.name}")
+
+                # Generate PDF report alongside Markdown
+                try:
+                    disc = safe_read_csv(run_dir / "discovered_candidates.csv")
+                    subm = safe_read_csv(run_dir / "subdomain_metrics.csv")
+                    enum = safe_read_csv(
+                        run_dir / "enumeration_method_counts.csv")
+                    obs = safe_read_csv(run_dir / "observations_long.csv")
+                    ctrl = safe_read_csv(run_dir / "control_metrics.csv")
+                    errs = safe_read_csv(run_dir / "errors.csv")
+                    meta = load_metadata(run_dir / "run_metadata.json")
+                    pdf_path = build_pdf_report(
+                        run_dir, meta, disc, subm, enum, obs, ctrl, errs)
+                except Exception as e:
+                    pdf_path = None
+                    print(
+                        f"⚠ PDF generation failed: {type(e).__name__}: {e}", file=sys.stderr)
+
+                md_name = md_path.name if isinstance(
+                    md_path, Path) else str(md_path)
+                pdf_name = pdf_path.name if isinstance(
+                    pdf_path, Path) else None
+
+                if pdf_name:
+                    print(
+                        f"✓ {run_dir.parent.name}/{run_dir.name}: {md_name}, {pdf_name}")
+                else:
+                    print(f"✓ {run_dir.parent.name}/{run_dir.name}: {md_name}")
                 written += 1
             except Exception as e:
+                import traceback
                 print(f"✗ {run_dir.parent.name}/{run_dir.name}: {type(e).__name__}: {e}", file=sys.stderr)
+                traceback.print_exc()
 
         print(f"\n✓ Reports written: {written}/{len(run_dirs)}")
         return 0 if written == len(run_dirs) else 1

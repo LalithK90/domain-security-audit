@@ -247,6 +247,7 @@ class StateManager:
                 # 3. status='error' AND next_scan_time <= now => retry due
                 # 4. status='queued' AND next_scan_time <= now => ready
                 # 5. status='scanning' AND updated_at < lease_cutoff => lease expired (crash recovery)
+                # EXCLUDE: status='failed_permanent' => stop retrying
                 
                 cursor = conn.execute("""
                     SELECT fqdn FROM scan_queue
@@ -255,6 +256,7 @@ class StateManager:
                         OR (status IN ('queued', 'scanned', 'error') AND next_scan_time <= ?)
                         OR (status = 'scanning' AND updated_at < ?)
                     )
+                    AND status != 'failed_permanent'
                     ORDER BY 
                         CASE status
                             WHEN 'never' THEN 1
@@ -693,4 +695,50 @@ class StateManager:
             cursor = conn.execute(
                 "SELECT value FROM meta WHERE key = ?", (key,))
             row = cursor.fetchone()
-            return row['value'] if row else default
+            return row['value'] if row else default    
+    def get_scan_attempts(self, fqdn: str) -> int:
+        """Get the number of scan attempts for a subdomain.
+        
+        WHY: Used to implement max retry limits (e.g., fail permanently after 3 attempts).
+        
+        Args:
+            fqdn: Fully qualified domain name
+        
+        Returns:
+            Number of scan attempts (0 if never scanned)
+        """
+        with self._get_conn() as conn:
+            cursor = conn.execute("""
+                SELECT attempts FROM scan_queue WHERE fqdn = ?
+            """, (fqdn,))
+            row = cursor.fetchone()
+            return row['attempts'] if row else 0
+    
+    def mark_scan_failed_permanent(self, fqdn: str, error_msg: str):
+        """Mark a scan as permanently failed (stop retrying).
+        
+        WHY: Prevents infinite retry loops for unfixable errors (e.g., DNS doesn't exist).
+        After max attempts exceeded, we mark as 'failed_permanent' so it won't be
+        retried even if next_scan_time arrives.
+        
+        Args:
+            fqdn: Fully qualified domain name
+            error_msg: Error message describing why scan failed
+        """
+        now = datetime.utcnow()
+        now_iso = now.isoformat()
+        
+        with self._get_conn() as conn:
+            conn.execute("""
+                UPDATE scan_queue
+                SET status = 'failed_permanent',
+                    last_scan_time = ?,
+                    next_scan_time = NULL,
+                    last_error = ?,
+                    attempts = attempts + 1,
+                    updated_at = ?
+                WHERE fqdn = ?
+            """, (now_iso, f"PERMANENT FAILURE: {error_msg}", now_iso, fqdn))
+            conn.commit()
+        
+        logger.warning(f"🚫 {fqdn}: Marked as permanently failed - {error_msg}")

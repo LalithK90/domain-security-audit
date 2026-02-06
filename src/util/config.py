@@ -82,6 +82,23 @@ class Config:
         # Create directories
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.out_dir.mkdir(parents=True, exist_ok=True)
+        
+        # ===== SMART SCANNING (NEW) =====
+        self.enable_smart_profiling = os.getenv("ENABLE_SMART_PROFILING", "false").lower() == "true"
+        self.max_scan_attempts = int(os.getenv("MAX_SCAN_ATTEMPTS", "3"))
+        self.scan_timeout_seconds = int(os.getenv("SCAN_TIMEOUT_SECONDS", "300"))
+        self.skip_brute_on_wildcard = os.getenv("SKIP_BRUTE_ON_WILDCARD", "false").lower() == "true"
+        known_raw = os.getenv("KNOWN_SUBDOMAINS", "")
+        self.known_subdomains = [s.strip() for s in known_raw.split(",") if s.strip()]
+    
+    def get(self, key: str, default=None):
+        """Get configuration value by key (dict-like interface).
+        
+        WHY: Allows config.get('KEY', default) syntax for backward compatibility.
+        """
+        # Convert key to attribute name (uppercase to lowercase with underscores)
+        attr_name = key.lower()
+        return getattr(self, attr_name, default)
     
     def to_dict(self) -> dict:
         """Convert config to dict for serialization."""
@@ -97,6 +114,10 @@ class Config:
             'use_public_dbs': self.use_public_dbs,
             'use_dns_brute': self.use_dns_brute,
             'allow_active_probes': self.allow_active_probes,
+            'enable_smart_profiling': self.enable_smart_profiling,
+            'max_scan_attempts': self.max_scan_attempts,
+            'scan_timeout_seconds': self.scan_timeout_seconds,
+            'skip_brute_on_wildcard': self.skip_brute_on_wildcard,
         }
     
     def __repr__(self) -> str:

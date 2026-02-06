@@ -96,6 +96,48 @@ class CheckEvaluator:
         
         return results
     
+    async def evaluate_selective_async(self, target: str, probe_data: Dict[str, Any], 
+                                       should_run_check) -> List[CheckResult]:
+        """Evaluate only selected checks for a target (smart profiling mode).
+        
+        DESIGN RATIONALE:
+        Smart profiling allows skipping irrelevant checks based on subdomain purpose.
+        For example, mail.example.com doesn't need web security header checks.
+        This can reduce scan time by 60-80% without losing relevant security coverage.
+        
+        Args:
+            target: The target being checked (FQDN)
+            probe_data: Dict of probe results (keys: 'dns', 'http', 'https', 'tls', 'email')
+            should_run_check: Callable that takes check_id and returns True/False
+        
+        Returns:
+            List of CheckResult objects, one per applicable and recommended check
+        """
+        # Add target to probe_data for applicability rules
+        probe_data['target'] = target
+        
+        # Get applicable checks
+        applicable_checks = get_applicable_checks(probe_data)
+        
+        results = []
+        for check_def in applicable_checks:
+            # Smart profiling: skip checks that aren't recommended for this target
+            if not should_run_check(check_def.check_id):
+                logger.debug(f"  ⏩ {target}: Skipping {check_def.check_id} (profiler recommendation)")
+                continue
+            
+            result = await self._evaluate_check_async(check_def, target, probe_data)
+            results.append(result)
+        
+        return results
+    
+    def get_all_check_names(self) -> List[str]:
+        """Get list of all available check IDs.
+        
+        WHY: Used by smart profiling to report skipped checks.
+        """
+        return list(self.evaluators.keys())
+    
     def evaluate_all(self, target: str, probe_data: Dict[str, Any]) -> List[CheckResult]:
         """Synchronous wrapper for evaluate_all_async (for backward compatibility).
         

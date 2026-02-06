@@ -72,6 +72,7 @@ from scanner.probes.tls_probe import TLSProbe
 from scanner.probes.email_probe import EmailProbe
 from scanner.checks.evaluator import CheckEvaluator
 from scanner.scoring.model import ScoringModel
+from scanner.scan_profiler import ScanProfiler
 from util.config import Config
 from util.cache import Cache
 from util.types import ProbeResult, CheckResult
@@ -112,6 +113,11 @@ class ScanWorker:
         
         self.evaluator = CheckEvaluator()
         self.scoring_model = ScoringModel()
+        
+        # Smart profiling (optional)
+        self.profiler = ScanProfiler() if config.enable_smart_profiling else None
+        self.max_attempts = config.max_scan_attempts
+        self.scan_timeout = config.scan_timeout_seconds
         
         self.scanned_count = 0
         self.error_count = 0
@@ -196,18 +202,57 @@ class ScanWorker:
         """
         for fqdn in fqdns:
             try:
-                await self._scan_single(fqdn)
-                self.scanned_count += 1
+                # Check max attempts before scanning
+                if hasattr(self.state_mgr, 'get_scan_attempts'):
+                    attempts = self.state_mgr.get_scan_attempts(fqdn)
+                    if attempts >= self.max_attempts:
+                        logger.warning(f"⏭️  {fqdn}: Skipping (max {self.max_attempts} attempts reached)")
+                        continue
+                
+                # Apply scan timeout
+                try:
+                    await asyncio.wait_for(
+                        self._scan_single(fqdn),
+                        timeout=self.scan_timeout
+                    )
+                    self.scanned_count += 1
+                except asyncio.TimeoutError:
+                    logger.error(f"⏱️  {fqdn}: Scan timeout after {self.scan_timeout}s")
+                    self.error_count += 1
+                    
+                    # Mark as error with permanent failure after max attempts
+                    if hasattr(self.state_mgr, 'get_scan_attempts'):
+                        attempts = self.state_mgr.get_scan_attempts(fqdn)
+                        if attempts + 1 >= self.max_attempts:
+                            if hasattr(self.state_mgr, 'mark_scan_failed_permanent'):
+                                self.state_mgr.mark_scan_failed_permanent(
+                                    fqdn,
+                                    f"Timeout after {self.scan_timeout}s (attempt {attempts + 1}/{self.max_attempts})"
+                                )
+                            else:
+                                self.state_mgr.mark_scan_complete(fqdn, success=False, error_msg=f"Timeout after {self.scan_timeout}s")
+                        else:
+                            self.state_mgr.mark_scan_complete(fqdn, success=False, error_msg=f"Timeout after {self.scan_timeout}s")
+                    else:
+                        self.state_mgr.mark_scan_complete(fqdn, success=False, error_msg=f"Timeout after {self.scan_timeout}s")
+                    continue
+                    
             except Exception as e:
                 logger.error(f"Failed to scan {fqdn}: {e}")
                 self.error_count += 1
                 
-                # Mark as error
-                self.state_mgr.mark_scan_complete(
-                    fqdn,
-                    success=False,
-                    error_msg=str(e)
-                )
+                # Mark as error with permanent failure after max attempts
+                if hasattr(self.state_mgr, 'get_scan_attempts'):
+                    attempts = self.state_mgr.get_scan_attempts(fqdn)
+                    if attempts + 1 >= self.max_attempts:
+                        if hasattr(self.state_mgr, 'mark_scan_failed_permanent'):
+                            self.state_mgr.mark_scan_failed_permanent(fqdn, str(e))
+                        else:
+                            self.state_mgr.mark_scan_complete(fqdn, success=False, error_msg=str(e))
+                    else:
+                        self.state_mgr.mark_scan_complete(fqdn, success=False, error_msg=str(e))
+                else:
+                    self.state_mgr.mark_scan_complete(fqdn, success=False, error_msg=str(e))
     
     async def _scan_single(self, fqdn: str):
         """Scan a single target.
@@ -215,6 +260,12 @@ class ScanWorker:
         WHY: Execute full scan pipeline: probe → evaluate → score → persist.
         """
         logger.debug(f"Scanning {fqdn}...")
+        
+        # Smart profiling (if enabled)
+        profile_info = None
+        if self.profiler:
+            profile_info = self.profiler.detect_profile(fqdn)
+            logger.info(f"📋 {fqdn}: Profile={profile_info['profile']} ({profile_info['confidence']:.0%} confidence)")
         
         # Phase 1: Probing
         # Create HTTP probe (needs async context)
@@ -255,7 +306,22 @@ class ScanWorker:
         
         # Phase 2: Evaluate security checks
         try:
-            check_results = await self.evaluator.evaluate_all_async(fqdn, probe_data)
+            # Smart profiling: evaluate only recommended checks
+            if self.profiler and profile_info:
+                # Filter checks based on profile recommendations
+                check_results = await self.evaluator.evaluate_selective_async(
+                    fqdn, probe_data, 
+                    should_run_check=lambda check_name: self.profiler.should_run_check(fqdn, check_name)
+                )
+                
+                # Log skipped checks
+                all_checks = self.evaluator.get_all_check_names() if hasattr(self.evaluator, 'get_all_check_names') else []
+                skipped = [c for c in all_checks if not self.profiler.should_run_check(fqdn, c)]
+                if skipped:
+                    logger.info(f"  ⏩ Skipped {len(skipped)} checks: {', '.join(skipped[:3])}{'...' if len(skipped) > 3 else ''}")
+            else:
+                # Run all checks (legacy mode)
+                check_results = await self.evaluator.evaluate_all_async(fqdn, probe_data)
         except Exception as e:
             logger.error(f"Check evaluation failed for {fqdn}: {e}", exc_info=True)
             self.state_mgr.mark_scan_complete(
